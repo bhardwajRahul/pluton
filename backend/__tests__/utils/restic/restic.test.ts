@@ -329,6 +329,49 @@ describe('runResticCommand', () => {
 		expect(result).toBe(expectedOutput);
 	});
 
+	it('should not accumulate streaming backup stdout when progress callback is provided', async () => {
+		const onProgress = jest.fn();
+		const progressData = JSON.stringify({
+			message_type: 'status',
+			percent_done: 0.5,
+		});
+
+		const promise = runResticCommand(['backup', '/test'], {}, onProgress);
+
+		setImmediate(() => {
+			mockProcess.stdout.emit('data', Buffer.from(progressData));
+			mockProcess.stdout.emit('data', Buffer.from(progressData));
+			mockProcess.emit('close', 0);
+		});
+
+		const result = await promise;
+		expect(result).toBe('');
+		expect(onProgress).toHaveBeenCalled();
+	});
+
+	it('should keep only the summary line for streaming backup dry runs', async () => {
+		const onProgress = jest.fn();
+		const statusData = JSON.stringify({
+			message_type: 'status',
+			percent_done: 0.5,
+		});
+		const summaryData = JSON.stringify({
+			message_type: 'summary',
+			total_files_processed: 10,
+		});
+
+		const promise = runResticCommand(['backup', '/test', '--dry-run'], {}, onProgress);
+
+		setImmediate(() => {
+			mockProcess.stdout.emit('data', Buffer.from(`${statusData}\n`));
+			mockProcess.stdout.emit('data', Buffer.from(`${summaryData}\n`));
+			mockProcess.emit('close', 0);
+		});
+
+		const result = await promise;
+		expect(result).toBe(summaryData);
+	});
+
 	it('should handle verbose_status message type', async () => {
 		const onProgress = jest.fn();
 		const verboseStatusData = JSON.stringify({

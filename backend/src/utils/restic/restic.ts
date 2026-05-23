@@ -16,6 +16,15 @@ export type ResticCommandError = Error & {
 	stderr?: string;
 };
 
+// Cap retained stdout/stderr to avoid exceeding V8's max string size on long
+// streaming backups. 1 MiB is plenty for a final summary line or error trace.
+const MAX_RETAINED_OUTPUT = 1024 * 1024;
+
+function appendBounded(current: string, chunk: string): string {
+	const combined = current + chunk;
+	return combined.length > MAX_RETAINED_OUTPUT ? combined.slice(-MAX_RETAINED_OUTPUT) : combined;
+}
+
 export function runResticCommand(
 	args: string[],
 	env?: Record<string, string>,
@@ -27,6 +36,16 @@ export function runResticCommand(
 	let lastProgressTime = 0;
 	const THROTTLE_INTERVAL = 2000; // 2 seconds
 	const localAppData = process.env.LOCALAPPDATA || os.homedir();
+
+	// Long-running streaming commands (backup/restore/copy with --json) can emit
+	// hundreds of MB of progress JSON. When a progress callback is wired up we
+	// drop stdout entirely to avoid OOM. Dry-runs still need the trailing
+	// summary line, so we keep a bounded tail and extract the last line.
+	const cmd = args[0];
+	const isStreaming =
+		!!onProgress && (cmd === 'backup' || cmd === 'restore' || args.includes('copy'));
+	const isStreamingDryRun = isStreaming && cmd === 'backup' && args.includes('--dry-run');
+
 	return new Promise((resolve, reject) => {
 		const resticBinary = getBinaryPath('restic');
 		const rcloneBinaryPath = getBinaryPath('rclone');
@@ -96,10 +115,15 @@ export function runResticCommand(
 
 		// Handle Restic Output Messages
 		resticProcess.stdout?.on('data', (data: Buffer) => {
-			output += data.toString();
+			const stdoutText = data.toString();
+			if (!isStreaming) {
+				output += stdoutText;
+			} else if (isStreamingDryRun) {
+				output = appendBounded(output, stdoutText);
+			}
 			const currentTime = Date.now();
 			try {
-				const message = JSON.parse(data.toString());
+				const message = JSON.parse(stdoutText);
 				// console.log('[runResticCommand] Progress data :', message);
 				if (
 					message?.message_type &&
@@ -128,7 +152,7 @@ export function runResticCommand(
 		resticProcess.stderr?.on('data', (data: Buffer) => {
 			if (!wasCancelled) {
 				console.log('restic output Error :', data.toString());
-				errorOutput += data.toString();
+				errorOutput = appendBounded(errorOutput, data.toString());
 
 				// NOTE: The onError callback is disabled because rclone/restic always retries the backup task.
 				// The error is handled in process.on('close'
@@ -142,7 +166,13 @@ export function runResticCommand(
 			if (!wasCancelled) {
 				onComplete?.(code);
 				if (code === 0) {
-					resolve(output.trim());
+					let result = output.trim();
+					if (isStreamingDryRun) {
+						// Only the final summary line is meaningful for dry-runs.
+						const lines = result.split(/\r?\n/).filter(line => line.trim());
+						result = lines[lines.length - 1] ?? '';
+					}
+					resolve(result);
 				} else {
 					const stderr = errorOutput.trim();
 					console.log('Restic Error :', stderr || 'Restic command failed');
