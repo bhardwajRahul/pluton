@@ -7,7 +7,6 @@ import https from "https";
 import fs from "fs";
 import { createWriteStream } from "fs";
 import os from "os";
-import compressing from "compressing";
 import unbzip2Stream from "unbzip2-stream";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -251,29 +250,28 @@ function downloadFileOnce(url, destPath, redirectsLeft = 5) {
 }
 
 /**
- * Extract a .zip archive with a hard timeout.
+ * Extract a .zip archive using the OS-native extractor.
  *
- * The `compressing` library can neither resolve nor reject if it is handed a
- * truncated/corrupt archive, which lets the Node process drain its event loop
- * and exit 0 mid-build. Racing the extraction against a timeout converts that
- * silent hang into a thrown error so the surrounding retry/try-catch can react.
+ * The `compressing` (yauzl-based) library was observed to neither resolve nor
+ * reject on CI runners for a valid rclone archive, silently hanging the build.
+ * Shelling out to the platform's native unzip tool (which extracts the same
+ * archive without issue) is far more reliable. `execSync`'s `timeout` option
+ * guarantees we fail loudly instead of hanging forever.
  */
 async function extractZip(srcZip, destDir, { timeoutMs = 120000 } = {}) {
-  let timer;
-  const timeout = new Promise((_, reject) => {
-    timer = setTimeout(() => {
-      reject(
-        new Error(
-          `Zip extraction timed out after ${timeoutMs}ms (archive may be corrupt): ${srcZip}`,
-        ),
-      );
-    }, timeoutMs);
-  });
+  await mkdir(destDir, { recursive: true });
+
+  const isWindows = os.platform() === "win32";
+  // Windows ships bsdtar (libarchive), which handles .zip. GNU tar on Linux
+  // cannot, so use `unzip` there (preinstalled on the CI runners + macOS).
+  const command = isWindows
+    ? `tar -xf "${srcZip}" -C "${destDir}"`
+    : `unzip -o -q "${srcZip}" -d "${destDir}"`;
 
   try {
-    await Promise.race([compressing.zip.uncompress(srcZip, destDir), timeout]);
-  } finally {
-    clearTimeout(timer);
+    execSync(command, { stdio: "pipe", timeout: timeoutMs });
+  } catch (error) {
+    throw new Error(`Failed to extract ${srcZip}: ${error.message}`);
   }
 }
 
