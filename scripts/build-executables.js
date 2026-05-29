@@ -197,6 +197,9 @@ function downloadFileOnce(url, destPath, redirectsLeft = 5) {
         return;
       }
 
+      const expectedLength = Number(response.headers["content-length"]);
+      let downloadedBytes = 0;
+
       const file = createWriteStream(destPath);
 
       // Reject (rather than silently hang) if the connection stalls.
@@ -209,9 +212,31 @@ function downloadFileOnce(url, destPath, redirectsLeft = 5) {
         reject(err);
       };
 
+      response.on("data", (chunk) => {
+        downloadedBytes += chunk.length;
+      });
+
       response.on("error", fail);
       file.on("error", fail);
-      file.on("finish", () => file.close(() => resolve()));
+      file.on("finish", () => {
+        // Guard against silently-truncated downloads: if the server told us how
+        // many bytes to expect and we received fewer, treat it as a failure so
+        // the retry logic kicks in instead of handing a corrupt file to the
+        // unzip step (which can then dangle and let the process exit 0).
+        if (
+          Number.isFinite(expectedLength) &&
+          expectedLength > 0 &&
+          downloadedBytes !== expectedLength
+        ) {
+          fail(
+            new Error(
+              `Incomplete download: expected ${expectedLength} bytes but received ${downloadedBytes}`,
+            ),
+          );
+          return;
+        }
+        file.close(() => resolve());
+      });
 
       response.pipe(file);
     });
@@ -223,6 +248,33 @@ function downloadFileOnce(url, destPath, redirectsLeft = 5) {
       );
     });
   });
+}
+
+/**
+ * Extract a .zip archive with a hard timeout.
+ *
+ * The `compressing` library can neither resolve nor reject if it is handed a
+ * truncated/corrupt archive, which lets the Node process drain its event loop
+ * and exit 0 mid-build. Racing the extraction against a timeout converts that
+ * silent hang into a thrown error so the surrounding retry/try-catch can react.
+ */
+async function extractZip(srcZip, destDir, { timeoutMs = 120000 } = {}) {
+  let timer;
+  const timeout = new Promise((_, reject) => {
+    timer = setTimeout(() => {
+      reject(
+        new Error(
+          `Zip extraction timed out after ${timeoutMs}ms (archive may be corrupt): ${srcZip}`,
+        ),
+      );
+    }, timeoutMs);
+  });
+
+  try {
+    await Promise.race([compressing.zip.uncompress(srcZip, destDir), timeout]);
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 /**
@@ -601,7 +653,7 @@ async function downloadBinaries() {
         } else if (config.resticUrl.endsWith(".zip")) {
           // Extract zip to temp directory, then find and move the executable
           const extractDir = join(binariesDir, `restic-${platform}-extract`);
-          await compressing.zip.uncompress(resticTemp, extractDir);
+          await extractZip(resticTemp, extractDir);
 
           // Find the restic executable in the extracted files
           const files = await readdir(extractDir, { recursive: true });
@@ -666,7 +718,7 @@ async function downloadBinaries() {
 
         // Extract zip using compressing package (cross-platform)
         const extractDir = join(binariesDir, `rclone-${platform}-extract`);
-        await compressing.zip.uncompress(rcloneTemp, extractDir);
+        await extractZip(rcloneTemp, extractDir);
 
         // Find the rclone executable (usually in a versioned folder like rclone-v1.73.0-linux-amd64/)
         const files = await readdir(extractDir, { recursive: true });
