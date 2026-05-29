@@ -174,7 +174,8 @@ const PlanItem = ({ plan, layout = 'list' }: PlanItemProps) => {
                <Icon type="disk" size={14} /> <i>{formatBytes(stats.size)}</i>
             </div>
             <div className={classes.interval}>
-               <Icon type="interval" size={14} /> <i>{planIntervalName(interval)}</i>
+               <Icon type="interval" size={14} />{' '}
+               <i title={interval.type === 'days' ? 'Every ' + interval.days?.replace(/-/g, ', ') : ''}>{planIntervalName(interval)}</i>
             </div>
             <div
                className={classes.time}
