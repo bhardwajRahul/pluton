@@ -170,7 +170,7 @@ jobs:
 
   build-macos:
     name: Build macOS Assets
-    runs-on: macos-latest
+    runs-on: macos-15
     strategy:
       matrix:
         include:
