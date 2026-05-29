@@ -65,7 +65,7 @@ const IntervalField = ({
                {fieldValue.type === 'days' && (
                   <>
                      <div className={classes.weekDays}>
-                        {['sun', 'mon', 'tue', 'wed', 'thur', 'fri', 'sat'].map((d) => {
+                        {['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'].map((d) => {
                            return (
                               <button
                                  key={'weekday' + d}

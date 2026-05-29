@@ -91,7 +91,7 @@ export function getIntervalLabel(interval: PlanInterval): string {
 
 		case 'weekly':
 		case 'days':
-			const days = interval.days?.split(',') || [];
+			const days = interval.days?.split(/[,-]/).filter(d => d.trim().length > 0) || [];
 			if (days.length === 7) {
 				return 'Runs Every Day';
 			} else if (days.length === 1) {
@@ -148,8 +148,10 @@ const convertDaysToDates = (days: string): string => {
 		sat: 6,
 	};
 	const selectedDays = days
-		?.split(',')
-		.map(day => dayMap[day.toLowerCase()])
+		?.split(/[,-]/)
+		.map(day => day.trim().toLowerCase())
+		.filter(day => day.length > 0)
+		.map(day => dayMap[day])
 		.filter(day => day !== undefined)
 		.join(',');
 
