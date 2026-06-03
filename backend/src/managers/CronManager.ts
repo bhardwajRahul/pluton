@@ -19,6 +19,7 @@ interface StoredSchedule<T> {
 interface ScheduleEntry<T> {
 	type: string;
 	cron: Cron;
+	cronExpression: string;
 	options: T;
 }
 
@@ -82,14 +83,19 @@ export class CronManager<T extends ScheduleOptions> {
 					// Stop the old (no-op) cron and recreate with the real callback
 					entry.cron.stop();
 					const patchedOptions = { ...entry.options, taskCallback: cb } as T;
-					const cronExpression = (patchedOptions as any).cronExpression;
+					const cronExpression = entry.cronExpression;
 					const newCron = new Cron(cronExpression, () => {
 						(patchedOptions as any).taskCallback(id, patchedOptions);
 					});
 					if (!patchedOptions.isActive) {
 						newCron.pause();
 					}
-					patched.push({ type: entry.type, cron: newCron, options: patchedOptions });
+					patched.push({
+						type: entry.type,
+						cron: newCron,
+						cronExpression,
+						options: patchedOptions,
+					});
 				} else {
 					patched.push(entry);
 				}
@@ -105,7 +111,7 @@ export class CronManager<T extends ScheduleOptions> {
 			entries.forEach(entry => {
 				scheduleData.push({
 					id,
-					cronExpression: (entry.options as any).cronExpression,
+					cronExpression: entry.cronExpression,
 					scheduleType: entry.type,
 					options: entry.options,
 				});
@@ -175,7 +181,7 @@ export class CronManager<T extends ScheduleOptions> {
 				cron.pause();
 			}
 
-			existingSchedules.push({ type: scheduleType, cron, options });
+			existingSchedules.push({ type: scheduleType, cron, cronExpression, options });
 			this.schedules.set(id, existingSchedules);
 			await this.saveSchedules();
 		} catch (error: any) {
@@ -212,7 +218,9 @@ export class CronManager<T extends ScheduleOptions> {
 					}
 
 					const updatedSchedules = existingSchedules.map(s =>
-						s.type === scheduleType ? { type: scheduleType, cron: newCron, options } : s
+						s.type === scheduleType
+							? { type: scheduleType, cron: newCron, cronExpression, options }
+							: s
 					);
 
 					this.schedules.set(id, updatedSchedules);
