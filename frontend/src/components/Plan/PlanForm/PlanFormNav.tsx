@@ -9,7 +9,7 @@ interface PlanFProps {
 
 const PlanFormNav = ({ step, type, gotoStep }: PlanFProps) => {
    return (
-      <div className={`${PFClasses.steps} ${type === 'edit' ? PFClasses.stepsEdit : ''}`}>
+      <div className={`${PFClasses.steps} ${type === 'edit' ? PFClasses.stepsEdit : PFClasses.stepsAdd}`}>
          <ul>
             <li
                className={` ${(type === 'add' ? step >= 1 : step === 1) ? PFClasses.stepCurrent : ''}  ${type === 'add' && step > 1 ? PFClasses.stepPassed : ''}`}

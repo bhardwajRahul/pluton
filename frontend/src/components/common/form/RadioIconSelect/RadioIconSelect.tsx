@@ -12,6 +12,7 @@ interface RadioIconSelectProps {
    hint?: string;
    inline?: boolean;
    onUpdate: (type: string) => void;
+   onDisableClick?: (value: string) => void;
 }
 
 const RadioIconSelect = ({
@@ -24,8 +25,8 @@ const RadioIconSelect = ({
    inline = false,
    layout = 'grid',
    onUpdate,
+   onDisableClick,
 }: RadioIconSelectProps) => {
-   const radioDisabled = disabled;
    return (
       <FormField type="radioIconSelect" label={label} classes={classes.radioIconField} hint={hint} inline={inline}>
          <div
@@ -37,7 +38,13 @@ const RadioIconSelect = ({
                   <div
                      key={value}
                      className={`${classes.radioIconFieldOption} ${disabled ? classes.radioIconFieldDisabled : ''} ${fieldValue === value ? classes.radioIconFieldActive : ''}`}
-                     onClick={() => !disabled && !radioDisabled && onUpdate(value)}
+                     onClick={() => {
+                        if (disabled && onDisableClick) {
+                           onDisableClick(value);
+                        } else {
+                           onUpdate(value);
+                        }
+                     }}
                      data-tooltip-id="appTooltip"
                      data-tooltip-content={description}
                      data-tooltip-place="top"

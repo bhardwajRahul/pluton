@@ -100,4 +100,12 @@
          }
       }
    }
+   .steps.stepsAdd {
+      ul li i {
+         max-width: 70px;
+         white-space: nowrap;
+         overflow: hidden;
+         text-overflow: ellipsis;
+      }
+   }
 }

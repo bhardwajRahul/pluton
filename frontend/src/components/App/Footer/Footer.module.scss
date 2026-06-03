@@ -10,6 +10,7 @@
    font-size: 0.9em;
    a {
       color: inherit;
+      cursor: pointer;
       &:hover {
          color: var(--background-text-color-dark);
       }

@@ -1,5 +1,7 @@
+import { useState } from 'react';
 import { getUpdateDocLink } from '../../../utils';
 import Icon from '../../common/Icon/Icon';
+import Upgrade from '../../Upgrade/Upgrade';
 import classes from './Footer.module.scss';
 
 interface FooterProps {
@@ -11,6 +13,7 @@ interface FooterProps {
 }
 
 const Footer = ({ version = '1.0.0', latestVersion, hideUpgradeLink = false, changeLogUrl, edition = '' }: FooterProps) => {
+   const [showUpgrade, setShowUpgrade] = useState(false);
    const updateDocLink = getUpdateDocLink(hideUpgradeLink);
    return (
       <>
@@ -29,10 +32,7 @@ const Footer = ({ version = '1.0.0', latestVersion, hideUpgradeLink = false, cha
             <i className="pipe">|</i>
             {!hideUpgradeLink && (
                <>
-                  <a href="https://usepluton.com/pluton-pro/" target="_blank">
-                     Upgrade
-                  </a>{' '}
-                  <i className="pipe">|</i>
+                  <a onClick={() => setShowUpgrade(true)}>Upgrade</a> <i className="pipe">|</i>
                </>
             )}
             <a href="https://docs.usepluton.com" target="_blank">
@@ -43,6 +43,7 @@ const Footer = ({ version = '1.0.0', latestVersion, hideUpgradeLink = false, cha
                Changelog
             </a>
          </div>
+         {showUpgrade && <Upgrade onClose={() => setShowUpgrade(false)} />}
       </>
    );
 };

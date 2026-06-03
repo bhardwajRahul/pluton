@@ -528,3 +528,37 @@ export const getIntervalMinutes = (interval: PlanInterval): number => {
          return 1440;
    }
 };
+
+export const proViewFileFormatObj = {
+   image: ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp', 'ico', 'tif', 'tiff', 'avif'],
+   // richtext: ['md', 'csv', 'rtf', 'docx'],
+   audio: ['mp3', 'wav', 'ogg', 'flac', 'aac'],
+   video: ['mp4', 'webm', 'ogv'],
+   pdf: ['pdf'],
+   // office: ['doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'odt', 'ods', 'odp'],
+   code: [
+      'js',
+      'jsx',
+      'ts',
+      'tsx',
+      'html',
+      'css',
+      'scss',
+      'json',
+      'xml',
+      'yml',
+      'yaml',
+      'sh',
+      'py',
+      'java',
+      'c',
+      'cpp',
+      'cs',
+      'go',
+      'rb',
+      'php',
+      'md',
+   ],
+};
+
+export const proViewableFileFormats = Object.values(proViewFileFormatObj).flat();
