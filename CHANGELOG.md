@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.16.6](https://github.com/plutonhq/pluton/compare/pluton-v0.16.5...pluton-v0.16.6) (2026-06-04)
+
+
+### Bug Fixes
+
+* resolves integrity check cron issue ([f2a71c2](https://github.com/plutonhq/pluton/commit/f2a71c21d661822fe4684798a251485d0906851c))
+
 ## [0.16.5](https://github.com/plutonhq/pluton/compare/pluton-v0.16.4...pluton-v0.16.5) (2026-05-29)
 
 
