@@ -190,8 +190,18 @@ export class BaseSnapshotManager extends EventEmitter {
 				.filter(line => line.trim() !== '')
 				.map(item => JSON.parse(item));
 			// Parse JSON output into structured data
+			const seenPaths = new Set<string>();
 			const files: SnapShotFile[] = outputJSON
 				.filter(item => item.path !== undefined)
+				// Defensive dedupe by path. The change/diff view maps these entries
+				// 1:1, so a duplicate path would render repeatedly and inflate the
+				// change count (issue #77). A path is unique within a snapshot, so
+				// keeping the first occurrence is always correct.
+				.filter(item => {
+					if (seenPaths.has(item.path)) return false;
+					seenPaths.add(item.path);
+					return true;
+				})
 				.map((item: any) => ({
 					name: item.name,
 					path: item.path,
