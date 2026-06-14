@@ -59,7 +59,7 @@ export type Backup = {
    inProgress: boolean;
    totalFiles: number;
    totalSize: number;
-   changes: { new: number; modified: number; removed: number };
+   changes: { new: number; modified: number; removed: number; newDirs?: number; modifiedDirs?: number };
    active?: boolean;
    errorMsg?: string;
    hasRevisions?: boolean;

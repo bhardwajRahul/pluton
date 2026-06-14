@@ -195,7 +195,14 @@ describe('PlanStore', () => {
 			expect(result[0].totalSize).toBe(1024);
 			expect(result[0].duration).toBe(90);
 			expect(result[0].active).toBe(true);
-			expect(result[0].changes).toEqual({ new: 2, modified: 2, removed: 0 });
+			// Headline counts are files only; folder counts are surfaced separately (issue #77).
+			expect(result[0].changes).toEqual({
+				new: 1,
+				modified: 2,
+				removed: 0,
+				newDirs: 1,
+				modifiedDirs: 0,
+			});
 			// Check second backup (not in snapshots)
 			expect(result[1].active).toBe(false);
 		});
@@ -240,6 +247,16 @@ describe('PlanStore', () => {
 							authToken: '',
 							tags: '',
 						},
+						slack: {
+							enabled: false,
+							case: 'failure',
+							url: '',
+						},
+						discord: {
+							enabled: false,
+							case: 'failure',
+							url: '',
+						},
 					},
 					performance: {},
 					integrity: {
@@ -251,12 +268,14 @@ describe('PlanStore', () => {
 								enabled: false,
 								type: 'smtp',
 								emails: '',
+								case: 'failure',
 							},
 							webhook: {
 								enabled: false,
 								method: 'POST',
 								contentType: 'application/json',
 								url: '',
+								case: 'failure',
 							},
 							push: {
 								enabled: false,
@@ -264,6 +283,17 @@ describe('PlanStore', () => {
 								authType: 'none',
 								authToken: '',
 								tags: '',
+								case: 'failure',
+							},
+							slack: {
+								enabled: false,
+								case: 'failure',
+								url: '',
+							},
+							discord: {
+								enabled: false,
+								case: 'failure',
+								url: '',
 							},
 						},
 					},
@@ -370,5 +400,4 @@ describe('PlanStore', () => {
 			updateSpy.mockRestore();
 		});
 	});
-
 });

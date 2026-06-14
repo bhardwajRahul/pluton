@@ -172,9 +172,11 @@ export class PlanStore {
 				duration: Math.floor((backupEnded - backupStarted) / 1000),
 				active: stats?.snapshots?.includes(backup.id) || false,
 				changes: {
-					new: (taskStats?.files_new || 0) + (taskStats?.dirs_new || 0),
-					modified: (taskStats?.files_changed || 0) + (taskStats?.dirs_changed || 0),
+					new: taskStats?.files_new || 0,
+					modified: taskStats?.files_changed || 0,
 					removed: 0,
+					newDirs: taskStats?.dirs_new || 0,
+					modifiedDirs: taskStats?.dirs_changed || 0,
 				},
 			};
 		});

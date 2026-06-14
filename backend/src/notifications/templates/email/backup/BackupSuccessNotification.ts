@@ -292,8 +292,8 @@ export class BackupSuccessNotification extends BaseNotification {
 		const hasReplicationFailures = replicationFailures && replicationFailures.length > 0;
 		const sourceCount = plan.sourceConfig.includes.length;
 		const backupChanges = () => {
-			const newCount = (stats?.files_new || 0) + (stats?.dirs_new || 0);
-			const modifiedCount = (stats?.files_changed || 0) + (stats?.dirs_changed || 0);
+			const newCount = stats?.files_new || 0;
+			const modifiedCount = stats?.files_changed || 0;
 			const removedCount = 0;
 			const parts = [];
 			if (newCount > 0) parts.push(`${newCount} New`);

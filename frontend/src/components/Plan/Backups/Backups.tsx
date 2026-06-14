@@ -252,9 +252,9 @@ const Backups = ({
                            className={classes.changes}
                            data-tooltip-id="htmlToolTip"
                            data-tooltip-html={`
-                                          <div><b>New Items</b>: ${changes.new}</div>
-                                          <div><b>Modified Items</b>: ${changes.modified}</div>
-                                          <div><b>Deleted Items</b>: ${changes.removed || 0}</div>
+                                          <div><b>New Files</b>: ${changes.new}</div>
+                                          <div><b>Modified Files</b>: ${changes.modified}</div>
+                                          <div><b>Deleted Files</b>: ${changes.removed || 0}</div>
                                        `}
                         >
                            <span className={classes.changesNew}>
