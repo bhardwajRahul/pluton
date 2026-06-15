@@ -871,7 +871,7 @@ export const providers: Record<string, ProviderConfig> = {
 			'secret_access_key',
 			creds.secret_access_key,
 			'endpoint',
-			`https://${creds.endpoint}.r2.cloudflarestorage.com`,
+			`https://${creds.endpoint}.${creds.jurisdiction ? creds.jurisdiction + '.' : ''}r2.cloudflarestorage.com`,
 			'region',
 			'auto',
 			'no_check_bucket',

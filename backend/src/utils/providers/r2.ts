@@ -32,6 +32,22 @@ const r2Settings = [
 		command: '--s3-endpoint',
 	},
 	{
+		label: 'Jurisdiction',
+		value: 'jurisdiction',
+		fieldType: 'select',
+		authFieldType: 'client',
+		options: [
+			{ label: 'Global', value: '' },
+			{ label: 'European Union (EU)', value: 'eu' },
+			{ label: 'FedRAMP', value: 'fedramp' },
+		],
+		required: true,
+		default: '',
+		description:
+			'Your R2 Jurisdiction. Will be used to generate the Endpoint. Buckets created with jurisdictions must be accessed via jurisdiction-specific endpoints.',
+		command: '',
+	},
+	{
 		label: 'Bucket Name',
 		value: 'bucket',
 		fieldType: 'string',
