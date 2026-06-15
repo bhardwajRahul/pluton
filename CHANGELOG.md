@@ -1,5 +1,24 @@
 # Changelog
 
+## [0.17.0](https://github.com/plutonhq/pluton/compare/pluton-v0.16.6...pluton-v0.17.0) (2026-06-15)
+
+
+### Bug Fixes
+
+* resolve cloudflare R2 EU bucket storage connection issue ([2d44a10](https://github.com/plutonhq/pluton/commit/2d44a1080b3eb28a8892a113e2faa9daf16e5a4f))
+* resolves duplicates in snapshot comparison viewer ([b744c77](https://github.com/plutonhq/pluton/commit/b744c77358dfe758df549aaa8150652cd5bc0fe7))
+* resolves incorrect interval label on plans page ([9c2606a](https://github.com/plutonhq/pluton/commit/9c2606a6005c6f41254d20d89dcc9f017e84dd66))
+
+
+### Miscellaneous Chores
+
+* release 0.17.0 ([b34a273](https://github.com/plutonhq/pluton/commit/b34a27347299216d68a7173e7f43c94eac4ed6be))
+
+
+### Code Refactoring
+
+* snapshot file change count to only count files and not directories ([ea6e970](https://github.com/plutonhq/pluton/commit/ea6e97060dc81a0310897e59cb705a46209c7b07))
+
 ## [0.16.6](https://github.com/plutonhq/pluton/compare/pluton-v0.16.5...pluton-v0.16.6) (2026-06-04)
 
 
