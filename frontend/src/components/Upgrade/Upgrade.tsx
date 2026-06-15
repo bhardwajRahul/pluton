@@ -69,7 +69,10 @@ const Upgrade = ({ focus, onClose }: UpgradeProps) => {
                               <Icon type="check-circle" size={14} /> No encryption or compression. Quickly Access your files anywhere
                            </li>
                            <li>
-                              <Icon type="check-circle" size={14} /> Sync to Google Drive, Dropbox, Backblaze, and 70+ other storages.
+                              <Icon type="check-circle" size={14} /> Auto sync your files to multiple storages at once with Sync Replication
+                           </li>
+                           <li>
+                              <Icon type="check-circle" size={14} /> Sync to Google Drive, Dropbox, Backblaze, and 70+ other storages
                            </li>
                         </ul>
                         <div className={classes.tabImage}>
