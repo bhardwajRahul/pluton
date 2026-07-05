@@ -6,8 +6,10 @@ const config: Config = {
 	verbose: true,
 	clearMocks: true,
 
-	// Limit workers to prevent OOM and recycle workers that accumulate memory
-	maxWorkers: '50%',
+	// Limit workers to prevent OOM and recycle workers that accumulate memory.
+	// A fixed cap (not a core-percentage) keeps concurrent ts-jest compilation
+	// from exhausting native/zone memory on high-core machines.
+	maxWorkers: 4,
 	workerIdleMemoryLimit: '512MB',
 
 	// Explicitly define the transform using ts-jest
@@ -23,6 +25,9 @@ const config: Config = {
 					moduleResolution: 'bundler',
 					esModuleInterop: true,
 					allowSyntheticDefaultImports: true,
+					// Transpile each file in isolation instead of building a
+					// whole-program type graph — the main source of worker OOM.
+					isolatedModules: true,
 				},
 				diagnostics: false,
 			},
