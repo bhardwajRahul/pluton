@@ -41,7 +41,7 @@ const r2Settings = [
 			{ label: 'European Union (EU)', value: 'eu' },
 			{ label: 'FedRAMP', value: 'fedramp' },
 		],
-		required: true,
+		required: false,
 		default: '',
 		description:
 			'Your R2 Jurisdiction. Will be used to generate the Endpoint. Buckets created with jurisdictions must be accessed via jurisdiction-specific endpoints.',
