@@ -10,11 +10,14 @@ interface FooterProps {
    latestVersion?: string;
    hideUpgradeLink?: boolean;
    changeLogUrl?: string;
+   installType?: string;
 }
 
-const Footer = ({ version = '1.0.0', latestVersion, hideUpgradeLink = false, changeLogUrl, edition = '' }: FooterProps) => {
+const Footer = ({ version = '1.0.0', latestVersion, hideUpgradeLink = false, changeLogUrl, edition = '', installType }: FooterProps) => {
    const [showUpgrade, setShowUpgrade] = useState(false);
-   const updateDocLink = getUpdateDocLink(hideUpgradeLink);
+   const downloadPageLink = hideUpgradeLink ? 'https://account.usepluton.com/' : 'https://usepluton.com/download';
+   const updateDocLink = installType === 'binary' ? downloadPageLink : getUpdateDocLink(hideUpgradeLink);
+
    return (
       <>
          <div className={classes.footer}>
