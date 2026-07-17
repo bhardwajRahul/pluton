@@ -192,7 +192,7 @@ export async function createApp(): Promise<{ app: Express }> {
 					defaultSrc: ["'self'"],
 					scriptSrc: ["'self'", "'unsafe-inline'"],
 					styleSrc: ["'self'", "'unsafe-inline'"],
-					imgSrc: ["'self'", 'data:', 'blob:'],
+					imgSrc: ["'self'", 'data:', 'blob:', 'https://pluton.b-cdn.net'],
 					fontSrc: ["'self'", 'data:'],
 					connectSrc,
 					frameAncestors: ["'none'"],
