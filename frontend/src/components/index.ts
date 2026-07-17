@@ -115,6 +115,7 @@ export { default as RestoreWizard } from './Restore/RestoreWizard/RestoreWizard'
 // Settings components
 export { default as AppLogs } from './Settings/AppLogs/AppLogs';
 export { default as GeneralSettings } from './Settings/GeneralSettings/GeneralSettings';
+export { default as SelfBackupSettings } from './Settings/SelfBackupSettings/SelfBackupSettings';
 export { default as IntegrationSettings } from './Settings/IntegrationSettings/IntegrationSettings';
 export { default as SMTPSettings } from './Settings/IntegrationSettings/SMTPSettings';
 export { default as NtfySettings } from './Settings/IntegrationSettings/NtfySettings';

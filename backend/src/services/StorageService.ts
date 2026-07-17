@@ -2,6 +2,8 @@ import { Storage, storageInsertSchema, storageUpdateSchema } from '../db/schema/
 import { providers } from '../utils/providers';
 import { PlanStore } from '../stores/PlanStore';
 import { StorageStore } from '../stores/StorageStore';
+import { SettingsStore } from '../stores/SettingsStore';
+import { resolveSelfBackup } from '../utils/selfBackup/settings';
 import Cryptr from 'cryptr';
 import { BaseStorageManager } from '../managers/BaseStorageManager';
 import {
@@ -27,7 +29,8 @@ export class StorageService {
 		protected storageManager: BaseStorageManager,
 		protected systemManager: BaseSystemManager,
 		protected storageStore: StorageStore,
-		protected planStore: PlanStore
+		protected planStore: PlanStore,
+		protected settingsStore: SettingsStore
 	) {}
 
 	getSystemStrategy(deviceId: string): SystemStrategy {
@@ -261,6 +264,15 @@ export class StorageService {
 				throw new AppError(
 					400,
 					`This Storage is used as a replication target by the following plans: ${planTitles}. Please remove it from their replication settings before deleting the storage.`
+				);
+			}
+
+			const settingsRow = await this.settingsStore.getFirst();
+			const selfBackup = resolveSelfBackup(settingsRow?.settings);
+			if (selfBackup.enabled && selfBackup.storageId === id) {
+				throw new AppError(
+					400,
+					`This Storage is used by Pluton's self-backup. Please disable self-backup or choose a different storage before deleting it.`
 				);
 			}
 

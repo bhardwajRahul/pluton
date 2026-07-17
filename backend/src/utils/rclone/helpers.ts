@@ -2,7 +2,7 @@ import { ChildProcess } from 'child_process';
 import path from 'path';
 import os from 'os';
 import { appPaths } from '../AppPaths';
-import { runRcloneCommand } from './rclone';
+import { runRcloneCommand, RunRcloneOptions } from './rclone';
 import { runCommand } from '../runCommand';
 import { getBinaryPath } from '../binaryPathResolver';
 import { getInstallType } from '../installHelpers';
@@ -30,6 +30,55 @@ export const getRcloneConfigPath = (secure = false) => {
 	const rcloneConfPath = path.join(appPaths.getConfigDir(), fileName);
 	return rcloneConfPath;
 };
+
+export interface RcloneLsJsonItem {
+	Path: string;
+	Name: string;
+	Size: number;
+	MimeType?: string;
+	ModTime?: string;
+	IsDir: boolean;
+}
+
+/**
+ * Copy a single file to an exact destination path (not into a directory).
+ */
+export async function rcloneCopyTo(
+	src: string,
+	dest: string,
+	env?: Record<string, string>,
+	opts?: RunRcloneOptions
+): Promise<void> {
+	await runRcloneCommand(['copyto', src, dest], env, opts);
+}
+
+export async function rcloneDeleteFile(
+	target: string,
+	env?: Record<string, string>,
+	opts?: RunRcloneOptions
+): Promise<void> {
+	await runRcloneCommand(['deletefile', target], env, opts);
+}
+
+/**
+ * List a remote path as JSON.
+ */
+export async function rcloneLsJson(
+	target: string,
+	env?: Record<string, string>,
+	opts?: RunRcloneOptions
+): Promise<RcloneLsJsonItem[]> {
+	const raw = await runRcloneCommand(['lsjson', target], env, opts);
+	if (!raw || !raw.trimStart().startsWith('[')) {
+		return [];
+	}
+	try {
+		const parsed = JSON.parse(raw);
+		return Array.isArray(parsed) ? (parsed as RcloneLsJsonItem[]) : [];
+	} catch {
+		return [];
+	}
+}
 
 export async function encryptRcloneConfig(
 	password: string

@@ -183,6 +183,78 @@ describe('ConfigService', () => {
 		expect(mockConsoleError).toHaveBeenCalledWith(expect.stringContaining('ENCRYPTION_KEY'));
 	});
 
+	describe('CLI command invocations', () => {
+		// The fail-fast exists to stop the *app* booting broken. A CLI command never boots the
+		// app, and on docker/server installs the server's credentials are legitimately absent
+		// from the invoking shell, so exiting here made --restore-pluton unreachable there.
+		const originalArgv = process.argv;
+		afterEach(() => {
+			process.argv = originalArgv;
+		});
+
+		it.each([['--restore-pluton'], ['--reset-password']])(
+			'does not exit when credentials are missing but %s was passed',
+			async flag => {
+				process.env = { NODE_ENV: 'production' };
+				process.argv = ['node', 'pluton', flag];
+				mockExistsSync.mockReturnValue(false);
+
+				const { configService } = await import('../../src/services/ConfigService');
+
+				expect(mockExit).not.toHaveBeenCalled();
+				expect(configService.isSetupPending()).toBe(true);
+			}
+		);
+
+		it('still exposes SERVER_PORT, which the restore guard probes', async () => {
+			process.env = { NODE_ENV: 'production', SERVER_PORT: '8080' };
+			process.argv = ['node', 'pluton', '--restore-pluton', './b.pluton'];
+			mockExistsSync.mockReturnValue(false);
+
+			const { configService } = await import('../../src/services/ConfigService');
+
+			expect(configService.config.SERVER_PORT).toBe(8080);
+		});
+
+		it('reproduces the docker restore command: only PLUTON_ENCRYPTION_KEY is passed', async () => {
+			// Design doc 5.6 passes the key and nothing else. Before the escape hatch this
+			// exited 1 during import and the restore was impossible on docker.
+			process.env = {
+				NODE_ENV: 'production',
+				IS_DOCKER: 'true',
+				PLUTON_ENCRYPTION_KEY: 'a-real-encryption-key-123',
+			};
+			process.argv = ['node', 'pluton', '--restore-pluton', '/tmp/blob'];
+			mockExistsSync.mockReturnValue(false);
+
+			await import('../../src/services/ConfigService');
+
+			expect(mockExit).not.toHaveBeenCalled();
+		});
+
+		it('STILL fail-fasts for a real server boot with no CLI flag', async () => {
+			// The guard must only be scoped, never weakened.
+			process.env = { NODE_ENV: 'production' };
+			process.argv = ['node', 'pluton'];
+			mockExistsSync.mockReturnValue(false);
+
+			await expect(import('../../src/services/ConfigService')).rejects.toThrow(
+				'process.exit called'
+			);
+			expect(mockExit).toHaveBeenCalledWith(1);
+		});
+
+		it('does not treat an unrelated flag as a CLI command', async () => {
+			process.env = { NODE_ENV: 'production' };
+			process.argv = ['node', 'pluton', '--verbose'];
+			mockExistsSync.mockReturnValue(false);
+
+			await expect(import('../../src/services/ConfigService')).rejects.toThrow(
+				'process.exit called'
+			);
+		});
+	});
+
 	it('should exit the process for invalid data types', async () => {
 		// Arrange
 		process.env = {

@@ -5,7 +5,15 @@ import { getRcloneConfigPath } from './helpers';
 import { configService } from '../../services/ConfigService';
 import { buildRcloneEnvFromSettings } from '../globalSettings';
 
-export function runRcloneCommand(args: string[], env?: Record<string, string>): Promise<string> {
+export interface RunRcloneOptions {
+	timeoutMs?: number;
+}
+
+export function runRcloneCommand(
+	args: string[],
+	env?: Record<string, string>,
+	opts?: RunRcloneOptions
+): Promise<string> {
 	return new Promise((resolve, reject) => {
 		const rcloneBinary = getBinaryPath('rclone');
 		const rcloneConfigPath = getRcloneConfigPath();
@@ -25,6 +33,25 @@ export function runRcloneCommand(args: string[], env?: Record<string, string>): 
 		const rcProcess = spawn(rcloneBinary, args, { env: envVars });
 		let output = '';
 		let errorOutput = '';
+		let timer: NodeJS.Timeout | undefined;
+		let settled = false;
+
+		const settle = (fn: () => void) => {
+			if (settled) return;
+			settled = true;
+			if (timer) clearTimeout(timer);
+			fn();
+		};
+
+		if (opts?.timeoutMs) {
+			rcProcess.on('error', (error: Error) => settle(() => reject(error)));
+			timer = setTimeout(() => {
+				rcProcess.kill();
+				settle(() =>
+					reject(new Error(`Rclone command timed out after ${opts.timeoutMs}ms: ${args[0]}`))
+				);
+			}, opts.timeoutMs);
+		}
 
 		rcProcess.stdout?.on('data', (data: Buffer) => {
 			// console.log('[rclone] Data :', data.toString());
@@ -37,19 +64,21 @@ export function runRcloneCommand(args: string[], env?: Record<string, string>): 
 		});
 
 		rcProcess.on('close', (code: number) => {
-			if (code === 0) {
-				const outputRes = output.trim();
-				const errorOutputRes = errorOutput.trim();
-				if (outputRes) {
-					resolve(outputRes);
-				} else if (errorOutputRes) {
-					resolve(errorOutputRes);
+			settle(() => {
+				if (code === 0) {
+					const outputRes = output.trim();
+					const errorOutputRes = errorOutput.trim();
+					if (outputRes) {
+						resolve(outputRes);
+					} else if (errorOutputRes) {
+						resolve(errorOutputRes);
+					} else {
+						resolve('');
+					}
 				} else {
-					resolve('');
+					reject(new Error(errorOutput || `Rclone command failed`));
 				}
-			} else {
-				reject(new Error(errorOutput || `Rclone command failed`));
-			}
+			});
 		});
 	});
 }

@@ -7,7 +7,7 @@ import session from 'express-session';
 import createMemoryStore from 'memorystore';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
-import { db } from './db';
+import { db, sqlite } from './db';
 import { createPlanRouter } from './routes/plans';
 import { createDeviceRouter } from './routes/devices';
 import { createStorageRouter } from './routes/storages';
@@ -47,9 +47,11 @@ import { BaseSystemManager } from './managers/BaseSystemManager';
 import { BaseStorageManager } from './managers/BaseStorageManager';
 import { StorageService } from './services/StorageService';
 import { SettingsService } from './services/SettingsService';
+import { SelfBackupService } from './services/SelfBackupService';
 import { SystemTaskManager } from './jobs/SystemTaskManager';
 import { SYSTEM_JOBS } from './jobs/systemJobs';
 import { jobProcessor } from './jobs/JobProcessor';
+import { SelfBackupTask } from './jobs/tasks/SelfBackupTask';
 import { initializeLogger } from './utils/logger';
 import { configService } from './services/ConfigService';
 import { BaseRestoreManager } from './managers/BaseRestoreManager';
@@ -110,9 +112,11 @@ export async function createApp(): Promise<{ app: Express }> {
 		localStorageAgent,
 		localSystemAgent,
 		storageStore,
-		planStore
+		planStore,
+		settingsStore
 	);
-	const settingsService = new SettingsService(settingsStore);
+	const selfBackupService = new SelfBackupService(settingsStore, storageStore, sqlite, 'core');
+	const settingsService = new SettingsService(settingsStore, selfBackupService);
 
 	// API Route Controllers
 	const planController = new PlanController(planService);
@@ -260,6 +264,9 @@ export async function createApp(): Promise<{ app: Express }> {
 		backupManager: localPlanAgent,
 		restoreManager: localRestoreAgent,
 	});
+
+	// Self Backup Task
+	jobProcessor.addTask(new SelfBackupTask(selfBackupService));
 
 	jobProcessor.start();
 

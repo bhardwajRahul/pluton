@@ -2,6 +2,7 @@ import Cryptr from 'cryptr';
 import { StorageService } from '../../src/services/StorageService';
 import { StorageStore } from '../../src/stores/StorageStore';
 import { PlanStore } from '../../src/stores/PlanStore';
+import { SettingsStore } from '../../src/stores/SettingsStore';
 import { BaseStorageManager } from '../../src/managers/BaseStorageManager';
 import { BaseSystemManager } from '../../src/managers/BaseSystemManager';
 import { LocalStrategy, RemoteStrategy } from '../../src/strategies/system';
@@ -15,6 +16,7 @@ jest.mock('../../src/utils/rclone/helpers');
 // Mock dependencies
 jest.mock('../../src/stores/StorageStore');
 jest.mock('../../src/stores/PlanStore');
+jest.mock('../../src/stores/SettingsStore');
 jest.mock('../../src/managers/BaseStorageManager');
 jest.mock('../../src/managers/BaseSystemManager');
 jest.mock('../../src/strategies/system');
@@ -37,6 +39,7 @@ describe('StorageService', () => {
 	let storageService: StorageService;
 	let mockStorageStore: jest.Mocked<StorageStore>;
 	let mockPlanStore: jest.Mocked<PlanStore>;
+	let mockSettingsStore: jest.Mocked<SettingsStore>;
 	let mockStorageManager: jest.Mocked<BaseStorageManager>;
 	let mockSystemManager: jest.Mocked<BaseSystemManager>;
 	let mockLocalStrategy: jest.Mocked<LocalStrategy>;
@@ -50,6 +53,7 @@ describe('StorageService', () => {
 		// Instantiate mocks
 		mockStorageStore = new StorageStore(null as any) as jest.Mocked<StorageStore>;
 		mockPlanStore = new PlanStore(null as any) as jest.Mocked<PlanStore>;
+		mockSettingsStore = new SettingsStore(null as any) as jest.Mocked<SettingsStore>;
 		mockStorageManager = new BaseStorageManager() as jest.Mocked<BaseStorageManager>;
 		mockSystemManager = new BaseSystemManager() as jest.Mocked<BaseSystemManager>;
 
@@ -74,7 +78,8 @@ describe('StorageService', () => {
 			mockStorageManager,
 			mockSystemManager,
 			mockStorageStore,
-			mockPlanStore
+			mockPlanStore,
+			mockSettingsStore
 		);
 	});
 
@@ -277,6 +282,37 @@ describe('StorageService', () => {
 			await expect(storageService.deleteStorage(storageId)).rejects.toThrow(
 				'This Storage is used as a replication target by the following plans: Plan B. Please remove it from their replication settings before deleting the storage.'
 			);
+		});
+
+		it('should throw AppError if an active self-backup uses the storage', async () => {
+			mockStorageStore.getById.mockResolvedValue(mockStorage);
+			mockPlanStore.getStoragePlans.mockResolvedValue([]);
+			mockStorageStore.getReplicationPlans = jest.fn().mockResolvedValue([]);
+			mockSettingsStore.getFirst.mockResolvedValue({
+				settings: { selfBackup: { enabled: true, storageId } },
+			} as any);
+
+			await expect(storageService.deleteStorage(storageId)).rejects.toThrow(AppError);
+			await expect(storageService.deleteStorage(storageId)).rejects.toThrow(
+				"This Storage is used by Pluton's self-backup. Please disable self-backup or choose a different storage before deleting it."
+			);
+			expect(mockStorageManager.deleteRemote).not.toHaveBeenCalled();
+		});
+
+		it('should allow deletion when self-backup is disabled or uses a different storage', async () => {
+			mockStorageStore.getById.mockResolvedValue(mockStorage);
+			mockPlanStore.getStoragePlans.mockResolvedValue([]);
+			mockStorageStore.getReplicationPlans = jest.fn().mockResolvedValue([]);
+			mockSettingsStore.getFirst.mockResolvedValue({
+				settings: { selfBackup: { enabled: true, storageId: 'a-different-storage' } },
+			} as any);
+			mockStorageManager.deleteRemote.mockResolvedValue({ success: true, result: 'Deleted' });
+			mockStorageStore.delete.mockResolvedValue(true);
+
+			const result = await storageService.deleteStorage(storageId);
+
+			expect(result).toBe(true);
+			expect(mockStorageManager.deleteRemote).toHaveBeenCalledWith('Old Storage');
 		});
 	});
 

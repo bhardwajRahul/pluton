@@ -9,6 +9,7 @@ import AnimatedWrapper from '../../components/common/AnimatedWrapper/AnimatedWra
 import AppLogs from '../../components/Settings/AppLogs/AppLogs';
 import SidePanel from '../../components/common/SidePanel/SidePanel';
 import GeneralSettings from '../../components/Settings/GeneralSettings/GeneralSettings';
+import SelfBackupSettings from '../../components/Settings/SelfBackupSettings/SelfBackupSettings';
 
 const Settings = () => {
    const [tab, setTab] = useState(() => {
@@ -62,6 +63,9 @@ const Settings = () => {
                   <li className={`${tab === 'integration' ? classes.tabActive : ''}`} onClick={() => setTab('integration')}>
                      <Icon type="integration" size={13} /> Integrations
                   </li>
+                  <li className={`${tab === 'backup' ? classes.tabActive : ''}`} onClick={() => setTab('backup')}>
+                     <Icon type="backup" size={13} /> Backup Pluton
+                  </li>
                </ul>
                <button className={classes.updateBtn} onClick={() => updateSettings()}>
                   <Icon type={settingsMutation.isPending ? 'loading' : 'check'} size={11} /> {settingsMutation.isPending ? 'Updating...' : 'Update'}
@@ -85,6 +89,16 @@ const Settings = () => {
                         settingsID={settingsID}
                         settings={settings}
                         onUpdate={(st: Record<string, any>) => setSettings({ ...settings, integration: st })}
+                     />
+                  </div>
+               </AnimatedWrapper>
+               <AnimatedWrapper isVisible={tab === 'backup'} animationType="slide-left" animationDuration={100} absolute={true}>
+                  <div className={classes.tabContent}>
+                     <h4>Backup Pluton</h4>
+                     <SelfBackupSettings
+                        settingsID={settingsID}
+                        settings={settings}
+                        onUpdate={(st: Record<string, any>) => setSettings({ ...settings, ...st })}
                      />
                   </div>
                </AnimatedWrapper>

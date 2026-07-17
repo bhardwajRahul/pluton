@@ -1,0 +1,71 @@
+<div>
+	<div class="center">
+		<h2 class="title title-error">
+			<img
+				width="16"
+				height="16"
+				src="https://pluton.b-cdn.net/email/cross-red.png"
+				style="vertical-align: middle"
+			/>
+			Pluton Backup Failed
+		</h2>
+	</div>
+	<!-- Basic ERROR Info -->
+	<div class="backupError">
+		<span class="backupErrorTitle"
+			><i class="img-icon">
+				<img
+					width="14"
+					height="14"
+					src="https://pluton.b-cdn.net/email/warning-red.png"
+					style="vertical-align: middle"
+				/>
+			</i>
+			<strong>Self-Backup Failed</strong></span
+		>
+		<p>
+			<%= appTitle %> could not back up its own configuration. Until this is resolved, your
+			plans, storages and credentials are not being protected.
+		</p>
+		<p>Error: <%= error %></p>
+	</div>
+
+	<!-- Basic Summary Info -->
+	<div class="backupDateTime">
+		<table role="presentation" cellpadding="0" cellspacing="0">
+			<% if (storageName) { %>
+			<tr class="backupSummary_date">
+				<td style="text-align: left">Storage:</td>
+				<td style="text-align: right"><strong><%= storageName %></strong></td>
+			</tr>
+			<% } %>
+			<% if (hostname) { %>
+			<tr class="backupSummary_date">
+				<td style="text-align: left">Host:</td>
+				<td style="text-align: right"><strong><%= hostname %></strong></td>
+			</tr>
+			<% } %>
+			<tr class="backupSummary_date">
+				<td style="text-align: left">
+					<img
+						width="11"
+						height="11"
+						src="https://pluton.b-cdn.net/email/cross.png"
+						style="vertical-align: middle"
+					/>
+					Failed At:
+				</td>
+				<td style="text-align: right"><%= failedAt %></td>
+			</tr>
+		</table>
+	</div>
+
+	<!-- Notification Settings Info -->
+	<div class="center notificationMsg">
+		<p>
+			You are receiving this email because failure notifications are enabled for Pluton's
+			self-backup. You can change this in
+			<a href="<%= appUrl %>/settings">Settings</a>.
+		</p>
+	</div>
+</div>

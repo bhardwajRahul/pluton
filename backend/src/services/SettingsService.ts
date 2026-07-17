@@ -10,6 +10,10 @@ import { AppSettings, IntegrationTypes } from '../types/settings';
 import { INotificationChannelResolver } from '../types/notifications';
 import { NotificationChannelResolver } from '../notifications/channels/NotificationChannelResolver';
 import { appPaths } from '../utils/AppPaths';
+import { selfBackupSettingsSchema } from '../utils/selfBackup/settings';
+import { SelfBackupService } from './SelfBackupService';
+import { jobQueue } from '../jobs/JobQueue';
+import { SELF_BACKUP_JOB_NAME } from '../jobs/systemJobs';
 import { AppError, NotFoundError } from '../utils/AppError';
 import Cryptr from 'cryptr';
 import { configService } from './ConfigService';
@@ -20,7 +24,10 @@ import { createHash, randomBytes } from 'crypto';
  */
 export class SettingsService {
 	protected notificationChannelResolver: INotificationChannelResolver = NotificationChannelResolver;
-	constructor(protected settingsStore: SettingsStore) {}
+	constructor(
+		protected settingsStore: SettingsStore,
+		protected selfBackupService: SelfBackupService
+	) {}
 
 	async getMainSettings(): Promise<Settings | null> {
 		return await this.settingsStore.getFirst();
@@ -43,6 +50,19 @@ export class SettingsService {
 			} catch (error) {
 				console.error('Error parsing settings data:', error);
 				throw new AppError(400, 'Invalid settings data provided');
+			}
+
+			// settingsUpdateSchema treats the settings JSON column as opaque, so the
+			// self-backup block is validated separately.
+			if (parsedSettings.selfBackup !== undefined) {
+				const parsedSelfBackup = selfBackupSettingsSchema.safeParse(parsedSettings.selfBackup);
+				if (!parsedSelfBackup.success) {
+					throw new AppError(
+						400,
+						`Invalid Pluton backup settings: ${parsedSelfBackup.error.issues.map(i => i.message).join(', ')}`
+					);
+				}
+				parsedSettings.selfBackup = parsedSelfBackup.data;
 			}
 			const updatedSettings = await this.settingsStore.update(id, parsedSettings);
 
@@ -271,6 +291,30 @@ export class SettingsService {
 
 		// 4. Return the plain-text recovery codes to be shown to the user ONCE
 		return { recoveryCodes };
+	}
+
+	async getSelfBackupStatus() {
+		return await this.selfBackupService.getStatus();
+	}
+
+	async listSelfBackups() {
+		return await this.selfBackupService.listBackups();
+	}
+
+	async downloadSelfBackup(blobName: string) {
+		return await this.selfBackupService.downloadBackup(blobName);
+	}
+
+	/**
+	 * Queue the run rather than awaiting it: an inline run would block the response for the
+	 * whole upload and bypass the job lock. The UI polls the status endpoint.
+	 */
+	async runSelfBackupNow(): Promise<void> {
+		const { enabled } = await this.selfBackupService.getStatus();
+		if (!enabled) {
+			throw new AppError(400, 'Pluton backup is not enabled.');
+		}
+		jobQueue.add(SELF_BACKUP_JOB_NAME, { force: true }, 1, 0);
 	}
 
 	async checkLatestVersion() {

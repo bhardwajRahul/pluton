@@ -52,11 +52,23 @@ export interface NTFYSettings {
 	connected: boolean;
 }
 
+export interface SelfBackupSettings {
+	enabled: boolean;
+	storageId: string;
+	storageName: string;
+	path: string;
+	intervalHours: number;
+	retention: number;
+	/** Email the admin when a backup run fails. Requires a connected email integration. */
+	notifyOnFailure: boolean;
+}
+
 export interface AppSettings {
 	title: string;
 	description: string;
 	theme: 'light' | 'dark' | 'auto';
 	admin_email: string;
+	selfBackup?: SelfBackupSettings;
 	integration: {
 		smtp?: SmtpSettings;
 		sendgrid?: SendGridSettings;

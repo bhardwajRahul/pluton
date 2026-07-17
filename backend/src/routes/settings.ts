@@ -13,6 +13,14 @@ export function createSettingsRouter(
 	router.get('/:id/logs/download', authM, controller.downloadAppLogs.bind(controller));
 	router.post('/:id/2fa/setup', authM, controller.setupTwoFactorAuth.bind(controller));
 	router.post('/:id/2fa/finalize', authM, controller.finalizeTwoFactorSetup.bind(controller));
+	router.get('/:id/self-backup/status', authM, controller.getSelfBackupStatus.bind(controller));
+	router.post('/:id/self-backup/run', authM, controller.runSelfBackup.bind(controller));
+	router.get('/:id/self-backup/backups', authM, controller.listSelfBackups.bind(controller));
+	router.get(
+		'/:id/self-backup/backups/:blobName/download',
+		authM,
+		controller.downloadSelfBackup.bind(controller)
+	);
 
 	// Misc Routes
 	router.post('/integration/validate', authM, controller.validateIntegration.bind(controller));

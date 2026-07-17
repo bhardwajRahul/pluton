@@ -1,4 +1,5 @@
 import { Request, Response } from 'express';
+import { createReadStream } from 'fs';
 import { SettingsService } from '../services/SettingsService';
 import { AppSettings, IntegrationTypes } from '../types/settings';
 
@@ -207,6 +208,78 @@ export class SettingsController {
 		} catch (error: any) {
 			// If the code was invalid, the service will throw an error.
 			res.status(error.statusCode || 500).json({ success: false, error: error.message });
+		}
+	}
+
+	async getSelfBackupStatus(req: Request, res: Response): Promise<void> {
+		try {
+			const status = await this.settingsService.getSelfBackupStatus();
+			res.status(200).json({ success: true, result: status });
+		} catch (error: any) {
+			res.status(error.statusCode || 500).json({
+				success: false,
+				error: error instanceof Error ? error.message : 'Failed to get Pluton backup status',
+			});
+		}
+	}
+
+	async listSelfBackups(req: Request, res: Response): Promise<void> {
+		try {
+			const backups = await this.settingsService.listSelfBackups();
+			res.status(200).json({ success: true, result: backups });
+		} catch (error: any) {
+			res.status(error.statusCode || 500).json({
+				success: false,
+				error: error instanceof Error ? error.message : 'Failed to list Pluton backups',
+			});
+		}
+	}
+
+	async downloadSelfBackup(req: Request, res: Response): Promise<void> {
+		const blobName = req.params.blobName;
+		if (!blobName) {
+			res.status(400).json({ success: false, error: 'Backup name is required' });
+			return;
+		}
+
+		try {
+			const { localPath, cleanup } = await this.settingsService.downloadSelfBackup(blobName);
+
+			res.setHeader('Content-Type', 'application/octet-stream');
+			res.setHeader('Content-Disposition', `attachment; filename="${blobName}"`);
+
+			const fileStream = createReadStream(localPath);
+			// The temp copy lives only for this response; remove it once the socket is done
+			// either way (finish = fully sent, close = client aborted).
+			res.on('finish', () => void cleanup());
+			res.on('close', () => void cleanup());
+			fileStream.on('error', () => {
+				void cleanup();
+				if (!res.headersSent) {
+					res.status(500).json({ success: false, error: 'Failed to read backup file' });
+				} else {
+					res.destroy();
+				}
+			});
+			fileStream.pipe(res);
+		} catch (error: any) {
+			res.status(error.statusCode || 500).json({
+				success: false,
+				error: error instanceof Error ? error.message : 'Failed to download Pluton backup',
+			});
+		}
+	}
+
+	async runSelfBackup(req: Request, res: Response): Promise<void> {
+		try {
+			await this.settingsService.runSelfBackupNow();
+			// 202: the job is queued, not done. The UI polls the status endpoint.
+			res.status(202).json({ success: true, result: 'Pluton backup queued.' });
+		} catch (error: any) {
+			res.status(error.statusCode || 500).json({
+				success: false,
+				error: error instanceof Error ? error.message : 'Failed to queue Pluton backup',
+			});
 		}
 	}
 

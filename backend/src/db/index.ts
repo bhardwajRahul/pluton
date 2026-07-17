@@ -1,5 +1,5 @@
 import { drizzle } from 'drizzle-orm/better-sqlite3';
-import Database from 'better-sqlite3';
+import Database, { type Database as SqliteDatabase } from 'better-sqlite3';
 import path from 'path';
 import { plans, plansRelations } from './schema/plans';
 import { storageRelations, storages } from './schema/storages';
@@ -10,7 +10,8 @@ import { settings } from './schema/settings';
 import { appPaths } from '../utils/AppPaths';
 
 const dbPath = path.join(appPaths.getDbDir(), 'pluton.db');
-const sqlite = new Database(dbPath);
+export const sqlite: SqliteDatabase = new Database(dbPath);
+export const dbFilePath = dbPath;
 sqlite.pragma('journal_mode = WAL');
 
 export const db = drizzle(sqlite, {

@@ -1,48 +1,11 @@
-import readline from 'readline';
 import fs from 'fs';
 import path from 'path';
 import bcrypt from 'bcryptjs';
 import { appPaths } from './AppPaths';
 import { applyStrictPermissions } from './envFileHelpers';
+import { prompt } from './cliPrompt';
 
 const BCRYPT_SALT_ROUNDS = 10;
-
-/**
- * Prompts the user for input via stdin.
- * When `hidden` is true, input is not echoed (for passwords).
- */
-function prompt(question: string, hidden = false): Promise<string> {
-	return new Promise(resolve => {
-		if (hidden) {
-			// For hidden input, write the question directly and use raw mode
-			process.stdout.write(question);
-			const rl = readline.createInterface({
-				input: process.stdin,
-				output: new (require('stream').Writable)({
-					write(_chunk: any, _encoding: any, callback: () => void) {
-						callback(); // swallow all output (hides typed characters)
-					},
-				}),
-				terminal: true,
-			});
-
-			rl.question('', answer => {
-				rl.close();
-				process.stdout.write('\n');
-				resolve(answer);
-			});
-		} else {
-			const rl = readline.createInterface({
-				input: process.stdin,
-				output: process.stdout,
-			});
-			rl.question(question, answer => {
-				rl.close();
-				resolve(answer);
-			});
-		}
-	});
-}
 
 /**
  * Stores the new password hash in keys.json.

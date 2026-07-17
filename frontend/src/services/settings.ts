@@ -53,6 +53,8 @@ export function useUpdateSettings() {
       onSuccess: (res) => {
          console.log('# Settings Updated! :', res);
          queryClient.invalidateQueries({ queryKey: ['settings'] });
+         queryClient.invalidateQueries({ queryKey: ['selfBackupStatus'] });
+         queryClient.invalidateQueries({ queryKey: ['selfBackupBackups'] });
       },
    });
 }
@@ -131,6 +133,139 @@ export function useGetDownloadAppLogs() {
       onError: (res) => {
          console.log('# Logs Download Failed! :', res);
       },
+   });
+}
+
+// ============== Pluton Self-Backup API ==============
+
+export interface SelfBackupStatus {
+   enabled: boolean;
+   storageId: string;
+   storageName: string;
+   path: string;
+   intervalHours: number;
+   retention: number;
+   notifyOnFailure: boolean;
+   lastRunAt?: string;
+   lastSuccessAt?: string;
+   lastError?: string | null;
+   lastBlobName?: string;
+   running: boolean;
+}
+
+export interface SelfBackupBlob {
+   name: string;
+   size: number;
+   modTime?: string;
+}
+
+export async function getSelfBackupStatus(settingsID: string) {
+   const res = await fetch(`${API_URL}/settings/${settingsID}/self-backup/status`, {
+      method: 'GET',
+      credentials: 'include',
+   });
+   const data = await res.json();
+   if (!data.success) {
+      throw new Error(data.error);
+   }
+   return data as { success: boolean; result: SelfBackupStatus };
+}
+
+export function useGetSelfBackupStatus(settingsID: string) {
+   return useQuery({
+      queryKey: ['selfBackupStatus', settingsID],
+      queryFn: () => getSelfBackupStatus(settingsID),
+      enabled: !!settingsID,
+      refetchOnMount: true,
+      retry: false,
+      refetchInterval: (query) => (query.state.data?.result?.running ? 3000 : false),
+   });
+}
+
+export async function runSelfBackup(settingsID: string) {
+   const res = await fetch(`${API_URL}/settings/${settingsID}/self-backup/run`, {
+      method: 'POST',
+      credentials: 'include',
+   });
+   const data = await res.json();
+   if (!data.success) {
+      throw new Error(data.error);
+   }
+   return data;
+}
+
+export function useRunSelfBackup() {
+   const queryClient = useQueryClient();
+   return useMutation({
+      mutationFn: runSelfBackup,
+      onSuccess: () => {
+         queryClient.invalidateQueries({ queryKey: ['selfBackupStatus'] });
+         queryClient.invalidateQueries({ queryKey: ['selfBackupBackups'] });
+      },
+   });
+}
+
+export async function getSelfBackupBackups(settingsID: string) {
+   const res = await fetch(`${API_URL}/settings/${settingsID}/self-backup/backups`, {
+      method: 'GET',
+      credentials: 'include',
+   });
+   const data = await res.json();
+   if (!data.success) {
+      throw new Error(data.error);
+   }
+   return data as { success: boolean; result: SelfBackupBlob[] };
+}
+
+export function useGetSelfBackupBackups(settingsID: string, enabled = true) {
+   return useQuery({
+      queryKey: ['selfBackupBackups', settingsID],
+      queryFn: () => getSelfBackupBackups(settingsID),
+      enabled: enabled && !!settingsID,
+      refetchOnMount: true,
+      retry: false,
+   });
+}
+
+export async function downloadSelfBackup({ settingsID, blobName }: { settingsID: string; blobName: string }) {
+   const res = await fetch(`${API_URL}/settings/${settingsID}/self-backup/backups/${encodeURIComponent(blobName)}/download`, {
+      method: 'GET',
+      credentials: 'include',
+   });
+   if (!res.ok) {
+      const data = await res.json();
+      throw new Error(data.error);
+   }
+
+   const filename = res.headers.get('content-disposition')?.split('filename=')[1]?.replace(/"/g, '') || blobName;
+
+   const reader = res.body?.getReader();
+   const stream = new ReadableStream({
+      async start(controller) {
+         while (true) {
+            const { done, value } = await reader!.read();
+            if (done) break;
+            controller.enqueue(value);
+         }
+         controller.close();
+         reader!.releaseLock();
+      },
+   });
+
+   const blob = await new Response(stream).blob();
+   const url = window.URL.createObjectURL(blob);
+   const link = document.createElement('a');
+   link.href = url;
+   link.download = filename;
+   document.body.appendChild(link);
+   link.click();
+   link.remove();
+   window.URL.revokeObjectURL(url);
+}
+
+export function useDownloadSelfBackup() {
+   return useMutation({
+      mutationFn: downloadSelfBackup,
    });
 }
 

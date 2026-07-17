@@ -3,10 +3,8 @@ import fs from 'fs';
 import { appPaths } from '../utils/AppPaths';
 import path from 'path';
 import { requiresDesktopSetup } from '../utils/installHelpers';
-import {
-	readEncryptionKeyFromEnvFile,
-	verifyFilePermissions,
-} from '../utils/envFileHelpers';
+import { isCliCommandInvocation } from '../utils/cliCommands';
+import { readEncryptionKeyFromEnvFile, verifyFilePermissions } from '../utils/envFileHelpers';
 import { credentialManager } from './CredentialManager';
 
 // Schema for the .env config file (with optional sensitive fields for setup mode)
@@ -195,10 +193,21 @@ class ConfigService {
 		if (!parsedConfig.success) {
 			// Check if we're in binary mode on a desktop platform
 			// In this case, we can start in "setup pending" mode
-			if (requiresDesktopSetup()) {
-				console.log('⏳ [ConfigService] Binary mode detected without credentials.');
-				console.log('⏳ [ConfigService] Starting in setup pending mode...');
-				console.log('⏳ [ConfigService] Please complete the initial setup via the web interface.');
+			//
+			// CLI commands (--restore-pluton, --reset-password) take the same branch: they do
+			// their work and exit without ever booting the app, so the server's credential
+			// requirements dont apply to them. Exiting here would make them unreachable on docker/server installs
+			const isCliCommand = isCliCommandInvocation();
+			if (requiresDesktopSetup() || isCliCommand) {
+				if (isCliCommand) {
+					console.log('[ConfigService] Running a CLI command without full server credentials.');
+				} else {
+					console.log('⏳ [ConfigService] Binary mode detected without credentials.');
+					console.log('⏳ [ConfigService] Starting in setup pending mode...');
+					console.log(
+						'⏳ [ConfigService] Please complete the initial setup via the web interface.'
+					);
+				}
 
 				// Create a setup-mode config with placeholder values
 				this._isSetupPending = true;
@@ -211,7 +220,9 @@ class ConfigService {
 					SETUP_PENDING: true,
 				} as SetupModeConfig;
 
-				console.log('⏳ Environment configuration loaded in SETUP PENDING mode.');
+				if (!isCliCommand) {
+					console.log('⏳ Environment configuration loaded in SETUP PENDING mode.');
+				}
 				return;
 			}
 

@@ -2,7 +2,7 @@ import './types/process.d.ts';
 import { BetterSQLite3Database } from 'drizzle-orm/better-sqlite3';
 import { migrate } from 'drizzle-orm/better-sqlite3/migrator';
 import { createApp } from './createApp';
-import { db } from './db';
+import { db, sqlite, dbFilePath } from './db';
 import { initSetup } from './utils/initSetup';
 import { configService, ConfigService } from './services/ConfigService';
 import { requiresDesktopSetup } from './utils/installHelpers';
@@ -15,19 +15,32 @@ export { configService } from './services/ConfigService';
 
 // This block only runs when this file is executed directly (e.g., npm run dev or packaged executable)
 // Always run when imported as the main entry point
-import path from 'path';
 import fs from 'fs';
+import { getMigrationsFolder, getMigrationsJournalPath } from './utils/migrations';
+import { CLI_COMMAND_FLAGS } from './utils/cliCommands';
 
 const isMainModule = import.meta.url === `file://${process.argv[1]}` || (process as any).pkg;
 const isDevelopment = process.env.NODE_ENV === 'development';
 
 if (isMainModule || isDevelopment) {
 	(async () => {
+		// These flags are also what lets ConfigService skip its server-credential fail-fast
+		// at import time, so both sides read the same list. See utils/cliCommands.ts.
+		const [RESET_PASSWORD_FLAG, RESTORE_PLUTON_FLAG] = CLI_COMMAND_FLAGS;
+
 		// Handle --reset-password CLI command (runs and exits, does not start server)
-		if (process.argv.includes('--reset-password')) {
+		if (process.argv.includes(RESET_PASSWORD_FLAG)) {
 			const { handlePasswordReset } = await import('./utils/cliPasswordReset');
 			await handlePasswordReset();
 			return; // handlePasswordReset calls process.exit(), but just in case
+		}
+
+		// Handle --restore-pluton CLI command (runs and exits, does not start server).
+		// Must run before migrations, initSetup and listen. It replaces the whole data dir.
+		if (process.argv.includes(RESTORE_PLUTON_FLAG)) {
+			const { handleSelfRestore } = await import('./utils/cliSelfRestore');
+			await handleSelfRestore({ sqlite, dbFilePath, edition: 'core' });
+			return;
 		}
 
 		// For binary installations on desktop platforms, try to load credentials from env file or keyring
@@ -45,13 +58,10 @@ if (isMainModule || isDevelopment) {
 		if (process.env.NODE_ENV === 'production') {
 			console.log('Running database migrations...');
 			try {
-				const migrationsFolder =
-					process.env.IS_DOCKER === 'true'
-						? '/app/drizzle'
-						: path.join(path.dirname(process.execPath), 'drizzle');
+				const migrationsFolder = getMigrationsFolder();
 
 				// Check if migrations exist
-				const journalPath = path.join(migrationsFolder, 'meta', '_journal.json');
+				const journalPath = getMigrationsJournalPath(migrationsFolder);
 				if (!fs.existsSync(journalPath)) {
 					console.log('No migrations found (meta/_journal.json missing), skipping...');
 				} else {

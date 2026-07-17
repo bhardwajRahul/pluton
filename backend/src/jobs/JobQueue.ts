@@ -73,6 +73,13 @@ class JobQueue {
 	}
 
 	/**
+	 * Whether a job of this name is queued or currently running.
+	 */
+	public hasPending(jobName: string): boolean {
+		return this.runningJob?.name === jobName || this.queue.some(job => job.name === jobName);
+	}
+
+	/**
 	 * Marks the currently running job as complete.
 	 */
 	public completeJob(): void {
