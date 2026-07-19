@@ -55,6 +55,7 @@ import { SelfBackupTask } from './jobs/tasks/SelfBackupTask';
 import { initializeLogger } from './utils/logger';
 import { configService } from './services/ConfigService';
 import { BaseRestoreManager } from './managers/BaseRestoreManager';
+import { parseTrustProxy } from './utils/helpers';
 
 const MemoryStore = createMemoryStore(session);
 
@@ -130,6 +131,13 @@ export async function createApp(): Promise<{ app: Express }> {
 
 	// Express App
 	const app = express();
+
+	// Reverse proxy support
+	const trustProxy = configService.config.TRUST_PROXY;
+	if (trustProxy !== undefined && trustProxy !== '') {
+		app.set('trust proxy', parseTrustProxy(trustProxy));
+	}
+
 	app.use(
 		cors({
 			origin: [

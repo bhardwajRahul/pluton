@@ -45,6 +45,8 @@ services:
       MAX_CONCURRENT_BACKUPS: ${MAX_CONCURRENT_BACKUPS:-2}
       SESSION_DURATION: ${SESSION_DURATION:-7} # How long frontend login Session lasts in Days
 
+      # TRUST_PROXY: ${TRUST_PROXY:-1} #Uncomment when running Pluton behind a reverse proxy (Caddy, Nginx, Traefik, ...).
+
       # ===== User Interface Security Settings =====
       ALLOW_CUSTOM_RESTORE_PATH: ${ALLOW_CUSTOM_RESTORE_PATH:-true}
       ALLOW_FILE_BROWSER: ${ALLOW_FILE_BROWSER:-true}

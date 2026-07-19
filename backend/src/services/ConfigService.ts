@@ -22,6 +22,9 @@ const baseConfigSchema = z.object({
 	ALLOW_FILE_BROWSER: z.coerce.boolean().default(true).optional(),
 	FILE_BROWSER_ROOT: z.string().optional(),
 
+	// Reverse proxy: value passed to Express's `trust proxy` setting.
+	TRUST_PROXY: z.string().optional(),
+
 	// Security (optional in setup mode)
 	ENCRYPTION_KEY: z
 		.string()
@@ -61,6 +64,7 @@ const userConfigSchema = baseConfigSchema
 		ALLOW_FILE_BROWSER: true,
 		FILE_BROWSER_ROOT: true,
 		DISABLE_EVENT_SCRIPTS: true,
+		TRUST_PROXY: true,
 	})
 	.partial();
 

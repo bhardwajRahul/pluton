@@ -62,3 +62,34 @@ export const safeCompare = (a: string, b: string): boolean => {
 	if (a.length !== b.length) return false;
 	return timingSafeEqual(Buffer.from(a), Buffer.from(b));
 };
+
+/**
+ * Translate the TRUST_PROXY config value into what Express's `trust proxy`
+ * setting expects. Without this, running Pluton behind a reverse proxy
+ * (Caddy, Nginx, Traefik, ...) makes express-rate-limit throw
+ * ERR_ERL_UNEXPECTED_X_FORWARDED_FOR, because the proxy sends X-Forwarded-For
+ * while Express trusts no proxy by default.
+ *
+ * Accepted values:
+ *   - "true"/"false"           -> boolean
+ *   - a number (e.g. "1")      -> trust that many hops (recommended: the count
+ *                                 of proxies in front of Pluton)
+ *   - IP / subnet list         -> passed through as a comma-separated string
+ *
+ * Prefer a hop count over "true": trusting all proxies lets a client spoof
+ * X-Forwarded-For and defeat the auth/setup rate limiters.
+ */
+export function parseTrustProxy(value: string): boolean | number | string[] {
+	const trimmed = value.trim();
+	if (trimmed.toLowerCase() === 'true') return true;
+	if (trimmed.toLowerCase() === 'false') return false;
+
+	const asNumber = Number(trimmed);
+	if (Number.isInteger(asNumber) && asNumber >= 0) return asNumber;
+
+	// Otherwise treat it as a comma-separated list of trusted IPs/subnets.
+	return trimmed
+		.split(',')
+		.map(entry => entry.trim())
+		.filter(Boolean);
+}
