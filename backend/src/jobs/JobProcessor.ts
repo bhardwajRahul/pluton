@@ -198,9 +198,22 @@ class JobProcessor extends EventEmitter {
 				`Job failed during execution. Attempt ${job.attempts + 1} of ${job.maxAttempts}.`
 			);
 
-			// failJob() will re-queue the job if there are attempts left,
-			// and return 'true' only if it has permanently failed.
-			const isPermanentlyFailed = jobQueue.failJob(job);
+			// Some failures are permanent and must not be retried (e.g. a restic
+			// backup that failed with a wrong password or a missing repository).
+			const isNonRetryable = (error as { retryable?: boolean })?.retryable === false;
+
+			let isPermanentlyFailed: boolean;
+			if (isNonRetryable) {
+				logger.warn(
+					{ module: 'JobProcessor', job: job.name },
+					`Job failed with a non-retryable error. Skipping remaining retries.`
+				);
+				// Clear the running job without re-queuing it.
+				jobQueue.completeJob();
+				isPermanentlyFailed = true;
+			} else {
+				isPermanentlyFailed = jobQueue.failJob(job);
+			}
 
 			if (isPermanentlyFailed) {
 				logger.error(

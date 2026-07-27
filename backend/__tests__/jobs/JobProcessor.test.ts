@@ -317,6 +317,78 @@ describe('JobProcessor', () => {
 			});
 		});
 
+		it('does not retry a non-retryable error and fails immediately', async () => {
+			const job: Job = {
+				id: 'job-1',
+				name: 'Backup',
+				payload: { planId: 'plan-1', backupId: 'backup-1' },
+				attempts: 0,
+				maxAttempts: 5,
+				retryDelay: 60000,
+				lastAttempt: 0,
+			};
+
+			// Error tagged as non-retryable (e.g. restic wrong-password exit code 12).
+			const nonRetryableError = Object.assign(new Error('wrong password'), {
+				code: 12,
+				retryable: false,
+			});
+
+			const backupTask = new MockTask('Backup', jest.fn());
+			backupTask.executeFunc.mockRejectedValueOnce(nonRetryableError);
+
+			mockJobQueueGetNext.mockReturnValueOnce(job).mockReturnValue(null);
+
+			const emitSpy = jest.spyOn(jobProcessor, 'emit');
+			jobProcessor.addTask(backupTask);
+
+			await processOneJob();
+
+			// Must NOT go through the retry path.
+			expect(mockJobQueueFailJob).not.toHaveBeenCalled();
+			// Job is cleared without re-queuing.
+			expect(mockJobQueueCompleteJob).toHaveBeenCalled();
+			// A warning is logged and a permanent failure is emitted immediately.
+			expect(mockLogger.warn).toHaveBeenCalledWith(
+				{ module: 'JobProcessor', job: 'Backup' },
+				expect.stringContaining('non-retryable')
+			);
+			expect(emitSpy).toHaveBeenCalledWith('backup_failed', {
+				planId: 'plan-1',
+				backupId: 'backup-1',
+				error: 'wrong password',
+			});
+		});
+
+		it('still retries a retryable error (retryable !== false)', async () => {
+			const job: Job = {
+				id: 'job-1',
+				name: 'Backup',
+				payload: { planId: 'plan-1' },
+				attempts: 0,
+				maxAttempts: 5,
+				retryDelay: 60000,
+				lastAttempt: 0,
+			};
+
+			// Error tagged as retryable (e.g. restic lock-failed exit code 11).
+			const retryableError = Object.assign(new Error('unable to lock repository'), {
+				code: 11,
+				retryable: true,
+			});
+
+			const backupTask = new MockTask('Backup', jest.fn());
+			backupTask.executeFunc.mockRejectedValueOnce(retryableError);
+			mockJobQueueFailJob.mockReturnValueOnce(false);
+
+			mockJobQueueGetNext.mockReturnValueOnce(job).mockReturnValue(null);
+			jobProcessor.addTask(backupTask);
+
+			await processOneJob();
+
+			expect(mockJobQueueFailJob).toHaveBeenCalledWith(job);
+		});
+
 		it('delays retry based on retryDelay', async () => {
 			const job: Job = {
 				id: 'job-1',

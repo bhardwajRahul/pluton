@@ -10,6 +10,7 @@ import { configService } from '../../services/ConfigService';
 import { buildResticEnvFromSettings, buildRcloneEnvFromSettings } from '../globalSettings';
 import { BackupVerifiedResult } from '../../types/plans';
 import { runHelper } from '../linuxHelper';
+import { ResticExitCode } from './exitCodes';
 
 export type ResticCommandError = Error & {
 	code?: number;
@@ -165,7 +166,8 @@ export function runResticCommand(
 			// console.log('Restic Process exited with code:', code);
 			if (!wasCancelled) {
 				onComplete?.(code);
-				if (code === 0) {
+				const isBackupWarning = cmd === 'backup' && code === ResticExitCode.IncompleteBackup;
+				if (code === 0 || isBackupWarning) {
 					let result = output.trim();
 					if (isStreamingDryRun) {
 						// Only the final summary line is meaningful for dry-runs.

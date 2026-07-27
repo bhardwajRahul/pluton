@@ -147,6 +147,45 @@ describe('runResticCommand', () => {
 		expect(onError).toHaveBeenCalledWith(expect.any(Buffer));
 	});
 
+	it('should resolve (not reject) when a backup exits with code 3 (partial read)', async () => {
+		const onComplete = jest.fn();
+		const summary = JSON.stringify({ message_type: 'summary', total_files_processed: 5 });
+
+		const promise = runResticCommand(['backup', '/test'], {}, undefined, undefined, onComplete);
+
+		setImmediate(() => {
+			mockProcess.stdout.emit('data', Buffer.from(summary));
+			mockProcess.stderr.emit('data', Buffer.from('error: could not read /test/locked.db'));
+			mockProcess.emit('close', 3);
+		});
+
+		await expect(promise).resolves.toBe(summary);
+		// onComplete still receives the real exit code so callers can log the warning.
+		expect(onComplete).toHaveBeenCalledWith(3);
+	});
+
+	it('should still reject with code 3 for a non-backup command', async () => {
+		const promise = runResticCommand(['check', '/test']);
+
+		setImmediate(() => {
+			mockProcess.stderr.emit('data', Buffer.from('some check error'));
+			mockProcess.emit('close', 3);
+		});
+
+		await expect(promise).rejects.toMatchObject({ code: 3 });
+	});
+
+	it('should attach the exit code to the rejected error', async () => {
+		const promise = runResticCommand(['backup', '/test']);
+
+		setImmediate(() => {
+			mockProcess.stderr.emit('data', Buffer.from('wrong password'));
+			mockProcess.emit('close', 12);
+		});
+
+		await expect(promise).rejects.toMatchObject({ code: 12 });
+	});
+
 	it('should call onComplete callback with exit code', async () => {
 		const onComplete = jest.fn();
 

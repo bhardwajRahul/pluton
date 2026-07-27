@@ -1,8 +1,13 @@
 import os from 'os';
 import fs from 'fs';
 import { EventEmitter } from 'events';
-import { getBackupPlanStats, runResticCommand } from '../../utils/restic/restic';
+import {
+	getBackupPlanStats,
+	runResticCommand,
+	ResticCommandError,
+} from '../../utils/restic/restic';
 import { generateResticRepoPath } from '../../utils/restic/helpers';
+import { classifyResticExitCode, isResticBackupWarning } from '../../utils/restic/exitCodes';
 import { processManager } from '../ProcessManager';
 import { PruneHandler } from './PruneHandler';
 import { ProgressManager } from '../ProgressManager';
@@ -150,7 +155,13 @@ export class BackupHandler {
 			// If this is not the final attempt, log that a retry will be scheduled.
 			// const isFinalAttempt = retryInfo.attempts + 1 === retryInfo.maxAttempts;
 
-			const permanentlyFailed = retryInfo.attempts + 1 > retryInfo.maxAttempts;
+			// If restic fails with code 10 or 12, retry cannot fix them, so fail immediately
+			const resticExitCode = (error as ResticCommandError)?.code;
+			const classification = classifyResticExitCode(resticExitCode);
+			const isNonRetryable = resticExitCode !== undefined && !classification.retryable;
+
+			const attemptsExhausted = retryInfo.attempts + 1 > retryInfo.maxAttempts;
+			const permanentlyFailed = attemptsExhausted || isNonRetryable;
 
 			// Mark as failed
 			await this.progressManager.markCompleted(
@@ -199,7 +210,12 @@ export class BackupHandler {
 			}
 
 			// Re-throw the error so the JobProcessor's catch block is triggered and decides whether to retry.
-			throw new Error(errorMessage);
+			// Preserve the restic exit code and a `retryable` flag so the JobProcessor
+			// can skip retries for permanent failures
+			const rethrown: ResticCommandError & { retryable?: boolean } = new Error(errorMessage);
+			rethrown.code = resticExitCode;
+			rethrown.retryable = !isNonRetryable;
+			throw rethrown;
 		} finally {
 			// This block runs regardless of success or failure, ensuring we always clean up.
 			this.runningBackups.delete(planId);
@@ -282,10 +298,25 @@ export class BackupHandler {
 		await this.updateProgress(planId, backupId, 'backup', 'BACKUP_OPERATION_START', false);
 
 		const repoPassword = options.settings.encryption ? configService.config.ENCRYPTION_KEY : '';
-		const handlers = this.createHandlers(planId, backupId);
+		const baseHandlers = this.createHandlers(planId, backupId);
 		const { resticArgs, resticEnv } = resticArgsAndEnv;
 		const resticArgsWithBackupTag: string[] = [...resticArgs, '--tag', `backup-${backupId}`];
 		const ignoreErrors = runConfig?.ignoreErrors || false;
+
+		// Capture restic exit code and warnings
+		let backupExitCode = 0;
+		const warnings: string[] = [];
+		const handlers = {
+			onProgress: (data: Buffer) => {
+				this.collectBackupWarnings(data, warnings);
+				baseHandlers.onProgress(data);
+			},
+			onError: baseHandlers.onError,
+			onComplete: (code: number) => {
+				backupExitCode = code;
+				baseHandlers.onComplete(code);
+			},
+		};
 
 		try {
 			// Run the Restic Backup command.
@@ -298,6 +329,18 @@ export class BackupHandler {
 				process => processManager.trackProcess('backup-' + backupId, process)
 			);
 			if (!this.cancelledBackups.has(planId + backupId)) {
+				// Exit code 3: snapshot created with warnings. Log this as a warning
+				//  in the progress tracking rather than failing/retrying the backup.
+				if (isResticBackupWarning(backupExitCode)) {
+					await this.updateProgress(
+						planId,
+						backupId,
+						'backup',
+						'BACKUP_WARNING',
+						true,
+						this.buildBackupWarningMessage(warnings)
+					);
+				}
 				await this.updateProgress(planId, backupId, 'backup', 'BACKUP_OPERATION_COMPLETE', true);
 			}
 			return result;
@@ -627,6 +670,45 @@ export class BackupHandler {
 	}
 
 	/**
+	 * Scans a chunk of restic `--json` output for `error` message items and
+	 * accumulates their messages. Used to build the BACKUP_WARNING detail.
+	 */
+	protected collectBackupWarnings(data: Buffer, warnings: string[]): void {
+		// Cap the number of collected warnings so this does not balloon the progress file
+		const MAX_WARNINGS = 100;
+		if (warnings.length >= MAX_WARNINGS) return;
+
+		const lines = data.toString().split('\n');
+		for (const line of lines) {
+			const trimmed = line.trim();
+			if (!trimmed) continue;
+			try {
+				const parsed = JSON.parse(trimmed);
+				if (parsed?.message_type === 'error') {
+					const item = parsed.item ? `${parsed.item}: ` : '';
+					const message = parsed.error?.message || parsed.error || 'Unknown read error';
+					warnings.push(`${item}${message}`);
+					if (warnings.length >= MAX_WARNINGS) return;
+				}
+			} catch {
+				// Ignore non-JSON lines.
+			}
+		}
+	}
+
+	/**
+	 * Builds a nice warning message for a backup that completed with exit code 3
+	 */
+	protected buildBackupWarningMessage(warnings: string[]): string {
+		const header =
+			'Backup completed, but some files or directories could not be read and were skipped. The snapshot was still created.';
+		if (warnings.length === 0) {
+			return header;
+		}
+		return `${header}\n\n${warnings.join('\n')}`;
+	}
+
+	/**
 	 * Helper to update restic progress with error handling
 	 */
 	protected async updateResticProgress(
@@ -717,7 +799,10 @@ export class BackupHandler {
 						false,
 						error?.message || 'Unknown Error'
 					);
-					throw new Error(`Dry run failed: ${error.message}`);
+					// Preserve the restic exit code
+					const dryRunError: ResticCommandError = new Error(`Dry run failed: ${error.message}`);
+					dryRunError.code = (error as ResticCommandError)?.code;
+					throw dryRunError;
 				} else {
 					return dryRunSummary;
 				}

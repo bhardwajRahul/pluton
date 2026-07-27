@@ -263,6 +263,115 @@ describe('BackupHandler', () => {
 			expect(mockMarkCompleted).toHaveBeenCalledWith('plan-1', 'backup-1', true);
 		});
 
+		it('should log a BACKUP_WARNING and complete successfully when backup exits with code 3', async () => {
+			// Dry run + unlock resolve normally; the actual backup invokes onComplete(3)
+			// (partial read - snapshot still created).
+			mockRunResticCommand.mockImplementation(
+				(args: string[], _env: any, onProgress: any, _onError: any, onComplete: any) => {
+					const isBackup = args[0] === 'backup' && !args.includes('--dry-run');
+					if (isBackup) {
+						// Emit a restic JSON error item so the warning message includes it.
+						onProgress?.(
+							Buffer.from(
+								JSON.stringify({
+									message_type: 'error',
+									error: { message: 'permission denied' },
+									item: '/data/locked.db',
+								})
+							)
+						);
+						onComplete?.(3);
+					}
+					return Promise.resolve('{"message_type":"summary"}');
+				}
+			);
+
+			const result = await handler.execute('plan-1', 'backup-1', baseOptions, {
+				attempts: 0,
+				maxAttempts: 5,
+			});
+
+			expect(result).toBeDefined();
+			// A BACKUP_WARNING action is logged in the progress tracking.
+			expect(mockUpdateAction).toHaveBeenCalledWith(
+				'plan-1',
+				'backup-1',
+				'backup',
+				'BACKUP_WARNING',
+				true,
+				expect.stringContaining('/data/locked.db: permission denied')
+			);
+			// The backup is still marked as completed (success), NOT failed/retried.
+			expect(mockMarkCompleted).toHaveBeenCalledWith('plan-1', 'backup-1', true);
+		});
+
+		it('should permanently fail (no retry) when backup exits with a non-retryable code', async () => {
+			// Dry run + unlock resolve; the actual backup rejects with wrong-password (12).
+			mockRunResticCommand.mockImplementation((args: string[]) => {
+				const isBackup = args[0] === 'backup' && !args.includes('--dry-run');
+				if (isBackup) {
+					return Promise.reject(Object.assign(new Error('wrong password'), { code: 12 }));
+				}
+				return Promise.resolve('{"message_type":"summary"}');
+			});
+
+			// Even though attempts (0) are far below maxAttempts (5), a non-retryable
+			// error must fail permanently on the first attempt.
+			await expect(
+				handler.execute('plan-1', 'backup-1', baseOptions, { attempts: 0, maxAttempts: 5 })
+			).rejects.toMatchObject({ code: 12, retryable: false });
+
+			// markCompleted's final arg (permanentlyFailed) must be true.
+			expect(mockMarkCompleted).toHaveBeenCalledWith(
+				'plan-1',
+				'backup-1',
+				false,
+				expect.stringContaining('wrong password'),
+				true
+			);
+			// A retry must NOT be scheduled.
+			expect(mockUpdateAction).not.toHaveBeenCalledWith(
+				'plan-1',
+				'backup-1',
+				'retry',
+				expect.stringContaining('BACKUP_RETRY'),
+				false,
+				undefined
+			);
+		});
+
+		it('should schedule a retry when backup exits with a retryable code', async () => {
+			// The actual backup rejects with lock-failed (11) - transient, should retry.
+			mockRunResticCommand.mockImplementation((args: string[]) => {
+				const isBackup = args[0] === 'backup' && !args.includes('--dry-run');
+				if (isBackup) {
+					return Promise.reject(Object.assign(new Error('unable to lock repository'), { code: 11 }));
+				}
+				return Promise.resolve('{"message_type":"summary"}');
+			});
+
+			await expect(
+				handler.execute('plan-1', 'backup-1', baseOptions, { attempts: 0, maxAttempts: 5 })
+			).rejects.toMatchObject({ code: 11, retryable: true });
+
+			// Not permanently failed (final arg false), and a retry is scheduled.
+			expect(mockMarkCompleted).toHaveBeenCalledWith(
+				'plan-1',
+				'backup-1',
+				false,
+				expect.stringContaining('unable to lock repository'),
+				false
+			);
+			expect(mockUpdateAction).toHaveBeenCalledWith(
+				'plan-1',
+				'backup-1',
+				'retry',
+				'BACKUP_RETRY_1_OF_5_SCHEDULED',
+				false,
+				undefined
+			);
+		});
+
 		it('should prevent concurrent backups for same plan', async () => {
 			// Make the check deterministic by pre-populating the runningBackups set
 			handler['runningBackups'].add('plan-1');
