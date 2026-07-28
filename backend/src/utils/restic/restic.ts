@@ -15,6 +15,7 @@ import { ResticExitCode } from './exitCodes';
 export type ResticCommandError = Error & {
 	code?: number;
 	stderr?: string;
+	timedOut?: boolean;
 };
 
 // Cap retained stdout/stderr to avoid exceeding V8's max string size on long
@@ -32,7 +33,8 @@ export function runResticCommand(
 	onProgress?: (data: Buffer) => void,
 	onError?: (data: Buffer) => void,
 	onComplete?: (code: number) => void,
-	onProcess?: (process: any) => void
+	onProcess?: (process: any) => void,
+	options?: { timeout?: number }
 ): Promise<string> {
 	let lastProgressTime = 0;
 	const THROTTLE_INTERVAL = 2000; // 2 seconds
@@ -98,8 +100,39 @@ export function runResticCommand(
 		let errorOutput = '';
 		let wasCancelled = false;
 
+		// When a timeout is provided we kill the process and reject with a `timedOut` error.
+		let timedOut = false;
+		let timeoutHandle: NodeJS.Timeout | undefined;
+		const timeoutMs = options?.timeout;
+		const clearTimeoutTimer = () => {
+			if (timeoutHandle) {
+				clearTimeout(timeoutHandle);
+				timeoutHandle = undefined;
+			}
+		};
+
+		if (timeoutMs && timeoutMs > 0) {
+			timeoutHandle = setTimeout(() => {
+				timedOut = true;
+				// SIGKILL rather than SIGTERM: a wedged rclone transport may not
+				// respond to a graceful signal.
+				try {
+					resticProcess.kill('SIGKILL');
+				} catch {
+					// Process may have already exited.
+				}
+				const timeoutError: ResticCommandError = new Error(
+					`Restic command timed out after ${timeoutMs}ms`
+				);
+				timeoutError.timedOut = true;
+				reject(timeoutError);
+			}, timeoutMs);
+		}
+
 		// Handle User exit gracefully
 		resticProcess.on('exit', (code, signal) => {
+			clearTimeoutTimer();
+			if (timedOut) return;
 			if (signal === 'SIGTERM') {
 				wasCancelled = true;
 				reject(new Error('Process terminated by user'));
@@ -109,6 +142,8 @@ export function runResticCommand(
 
 		// Handle Restic Run Errors
 		resticProcess.on('error', error => {
+			clearTimeoutTimer();
+			if (timedOut) return;
 			const errorMsg = `Failed to run restic : ${error.message}`;
 			onError?.(Buffer.from(errorMsg));
 			reject(new Error(errorMsg));
@@ -164,6 +199,8 @@ export function runResticCommand(
 		// Handle Process Exit
 		resticProcess.on('close', (code: number) => {
 			// console.log('Restic Process exited with code:', code);
+			clearTimeoutTimer();
+			if (timedOut) return;
 			if (!wasCancelled) {
 				onComplete?.(code);
 				const isBackupWarning = cmd === 'backup' && code === ResticExitCode.IncompleteBackup;
@@ -211,11 +248,15 @@ export async function getBackupPlanStats(
 	planId: string,
 	storageName: string,
 	storagePath: string,
-	encryption: boolean
+	encryption: boolean,
+	timeout?: number
 ): Promise<false | { total_size: number; snapshots: string[] }> {
 	if (!planId || !storageName || !storagePath) {
 		return false;
 	}
+	const deadline = timeout && timeout > 0 ? Date.now() + timeout : undefined;
+	const remainingTimeout = () =>
+		deadline !== undefined ? Math.max(1, deadline - Date.now()) : undefined;
 	// TODO: Run restic snapshot list command targeting the tag `plan-${planId}` with getSnapshotByTag
 	// run both the stats and the snapshot command simultaneously and return the result to the caller.
 	const repoPath = generateResticRepoPath(storageName, storagePath);
@@ -234,12 +275,32 @@ export async function getBackupPlanStats(
 	const snapshotsArgs = ['-r', repoPath, 'snapshots', '--tag', `plan-${planId}`, '--json'];
 	try {
 		// First get the actual repo size
-		const statsOutput = await runResticCommand(statsArgs, resticEnv);
+		const statsOutput = await runResticCommand(
+			statsArgs,
+			resticEnv,
+			undefined,
+			undefined,
+			undefined,
+			undefined,
+			{
+				timeout: remainingTimeout(),
+			}
+		);
 		const theStats = JSON.parse(statsOutput) as ResticRawStats;
 		// console.log('statsOutput :', statsOutput);
 
 		// Then get the backup ids from the active snapshots
-		const snapRes = await runResticCommand(snapshotsArgs, resticEnv);
+		const snapRes = await runResticCommand(
+			snapshotsArgs,
+			resticEnv,
+			undefined,
+			undefined,
+			undefined,
+			undefined,
+			{
+				timeout: remainingTimeout(),
+			}
+		);
 		const snapshots: ResticSnapshot[] = JSON.parse(snapRes);
 
 		const snapshotBackupIds: string[] = [];
@@ -255,6 +316,10 @@ export async function getBackupPlanStats(
 			snapshots: snapshotBackupIds,
 		};
 	} catch (error: any) {
+		// Surface timeouts to the caller so the post-backup phase can log them
+		if (error?.timedOut) {
+			throw error;
+		}
 		return false;
 	}
 }

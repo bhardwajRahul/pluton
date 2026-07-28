@@ -425,11 +425,14 @@ export class BackupHandler {
 			false
 		);
 		try {
+			// A forced 15 mins timeout is placed as after a huge backup,
+			// because some remote storage's api rate limit can hang this
 			const planStats = await getBackupPlanStats(
 				planId,
 				options.storage.name,
 				options.storagePath,
-				options.settings.encryption
+				options.settings.encryption,
+				15 * 60 * 1000
 			);
 			this.emitter.emit('backup_stats_update', {
 				planId,
