@@ -16,7 +16,7 @@ import {
 	PlanNotificationType,
 } from '../types/plans';
 import { planLogger } from '../utils/logger';
-import { generateUID } from '../utils/helpers';
+import { generateUID, normalizeStorageName } from '../utils/helpers';
 import { intervalToCron } from '../utils/intervalToCron';
 import { LocalStrategy as LocalBackupStrategy } from '../strategies/backup/LocalStrategy';
 import { RemoteStrategy as RemoteBackupStrategy } from '../strategies/backup/RemoteStrategy';
@@ -714,7 +714,7 @@ export class PlanService {
 			throw new NotFoundError('Storage not found');
 		}
 		return {
-			name: storage.id === 'local' ? 'local' : storage.name,
+			name: storage.id === 'local' ? 'local' : normalizeStorageName(storage.name),
 			type: storage.type as string,
 			authType: storage.authType as string,
 			settings: storage.settings as Record<string, string>,
@@ -742,9 +742,8 @@ export class PlanService {
 		return plan.settings.replication.storages
 			.map(rs => {
 				const record = storageRecords.find(s => s.id === rs.storageId);
-				const name = record?.name || '';
 				return {
-					storageName: name === 'Local' || name === 'Local Storage' ? 'local' : name,
+					storageName: normalizeStorageName(record?.name),
 					storagePath: rs.storagePath,
 				};
 			})

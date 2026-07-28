@@ -165,9 +165,8 @@ export class StorageService {
 				throw new AppError(400, 'Invalid storage data provided');
 			}
 			const { authType, credentials, settings, tags } = parsedStorageData;
-			// Update remote settings of all the devices first
-			const devicesWithStorage: string[] = [];
-			const plansWithStorage = await this.planStore.getStoragePlans(existingStorage.id);
+			// Update remote settings of all the sources first
+			const devicesWithStorage = await this.resolveStorageSources(existingStorage.id);
 			const deviceUpdateResult: Record<
 				string,
 				{
@@ -175,13 +174,7 @@ export class StorageService {
 					result: string;
 				}
 			> = {};
-			if (plansWithStorage && plansWithStorage.length > 0) {
-				plansWithStorage.forEach(async plan => {
-					if (plan.sourceId && !devicesWithStorage.includes(plan.sourceId)) {
-						devicesWithStorage.push(plan.sourceId);
-					}
-				});
-
+			if (devicesWithStorage.length > 0) {
 				//decrypt the existing credentials
 				const existingCreds = existingStorage?.credentials;
 				const decryptedOldCred: Record<string, string> = {};
@@ -239,6 +232,26 @@ export class StorageService {
 			}
 			throw new AppError(500, error?.message || 'Error updating storage.');
 		}
+	}
+
+	/**
+	 * Resolves which sources hold an rclone config for a storage and therefore
+	 * need it re-pushed when the storage is edited.
+	 */
+	protected async resolveStorageSources(storageId: string): Promise<string[]> {
+		const plansWithStorage = await this.planStore.getStoragePlans(storageId);
+		if (!plansWithStorage || plansWithStorage.length === 0) {
+			return [];
+		}
+
+		const sourceIds = new Set<string>();
+		for (const plan of plansWithStorage) {
+			if (plan.sourceId) {
+				sourceIds.add(plan.sourceId);
+			}
+		}
+
+		return [...sourceIds];
 	}
 
 	async deleteStorage(id: string): Promise<boolean> {

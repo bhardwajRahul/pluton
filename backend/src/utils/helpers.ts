@@ -58,6 +58,15 @@ export function setNestedValue(obj: any, path: string, value: any): void {
 	target[lastKey] = value;
 }
 
+/**
+ * Canonicalises a storage's display name to its rclone remote name. The built-in
+ * local storage is stored as "Local"/"Local Storage" but its remote is "local".
+ */
+export function normalizeStorageName(name?: string | null): string {
+	if (!name) return '';
+	return name === 'Local' || name === 'Local Storage' ? 'local' : name;
+}
+
 export const safeCompare = (a: string, b: string): boolean => {
 	if (a.length !== b.length) return false;
 	return timingSafeEqual(Buffer.from(a), Buffer.from(b));

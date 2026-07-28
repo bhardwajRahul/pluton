@@ -1,4 +1,9 @@
-import { generateUID, getNestedValue, setNestedValue } from '../../src/utils/helpers';
+import {
+	generateUID,
+	getNestedValue,
+	normalizeStorageName,
+	setNestedValue,
+} from '../../src/utils/helpers';
 
 describe('helpers', () => {
 	describe('generateUID', () => {
@@ -292,6 +297,28 @@ describe('helpers', () => {
 
 			setNestedValue(obj, fullPath, 'localhost');
 			expect(getNestedValue(obj, fullPath)).toBe('localhost');
+		});
+	});
+
+	describe('normalizeStorageName', () => {
+		it('should map the built-in local storage names to the rclone remote name', () => {
+			expect(normalizeStorageName('Local')).toBe('local');
+			expect(normalizeStorageName('Local Storage')).toBe('local');
+		});
+
+		it('should leave any other name untouched, including spaces', () => {
+			expect(normalizeStorageName('SFTP sur Backupix')).toBe('SFTP sur Backupix');
+			expect(normalizeStorageName('my-bucket')).toBe('my-bucket');
+		});
+
+		it('should be case sensitive, since rclone section names match exactly', () => {
+			expect(normalizeStorageName('local storage')).toBe('local storage');
+		});
+
+		it('should return an empty string for missing input', () => {
+			expect(normalizeStorageName(undefined)).toBe('');
+			expect(normalizeStorageName(null)).toBe('');
+			expect(normalizeStorageName('')).toBe('');
 		});
 	});
 });
