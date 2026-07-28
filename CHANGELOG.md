@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.18.0](https://github.com/plutonhq/pluton/compare/pluton-v0.17.1...pluton-v0.18.0) (2026-07-17)
+
+
+### Features
+
+* adds the ability to backup & restore pluton itself ([9eb13f4](https://github.com/plutonhq/pluton/commit/9eb13f49b1201bed80c6da38c4801981790c85d0))
+
+
+### Bug Fixes
+
+* resolves issue that made validating email integration break the settings ([5319aac](https://github.com/plutonhq/pluton/commit/5319aacab29a62c54e9bb0e8a9fa40956bf87160))
+
+
+### Dependencies
+
+* bump restic and rclone versions ([3fc8cc7](https://github.com/plutonhq/pluton/commit/3fc8cc7be25e796659e2c08a8a4ba7119f5d3fe3))
+
 ## [0.17.1](https://github.com/plutonhq/pluton/compare/pluton-v0.17.0...pluton-v0.17.1) (2026-07-05)
 
 
