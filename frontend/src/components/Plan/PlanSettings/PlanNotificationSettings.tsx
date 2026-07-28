@@ -1,9 +1,10 @@
+import { useEffect } from 'react';
+import { NavLink } from 'react-router';
 import classes from './PlanSettings.module.scss';
 import Select from '../../common/form/Select/Select';
 import Input from '../../common/form/Input/Input';
 import Toggle from '../../common/form/Toggle/Toggle';
 import { PlanNotification, PlanNotificationCase } from '../../../@types/plans';
-import { NavLink } from 'react-router';
 import PlanNotificationSettingsTester from './PlanNotificationSettingsTester';
 import { Icon } from '../..';
 
@@ -27,12 +28,21 @@ const PlanNotificationSettings = ({
    onUpdate,
 }: PlanNotificationSettingsProps) => {
    const hasConnectedIntegrations = types.length > 0;
-   const defaultEmail = !hasConnectedIntegrations && admin_email ? admin_email : '';
+   const defaultEmail = hasConnectedIntegrations && admin_email ? admin_email : '';
    const hasNtfyConnected = types.includes('ntfy');
 
    const updateNotificationEmails = (emails: string) => {
       onUpdate({ ...notificationSettings, email: { ...notificationSettings.email, emails } });
    };
+
+   useEffect(() => {
+      if (notificationSettings?.email?.enabled && !notificationSettings?.email?.emails && defaultEmail) {
+         updateNotificationEmails(defaultEmail);
+      }
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+   }, [notificationSettings?.email?.enabled, defaultEmail]);
+
+   console.log('defaultEmail :', defaultEmail);
 
    const caseOptions = [
       { label: 'On Start', value: 'start' },
