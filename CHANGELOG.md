@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.18.1](https://github.com/plutonhq/pluton/compare/pluton-v0.18.0...pluton-v0.18.1) (2026-07-28)
+
+
+### Bug Fixes
+
+* resolves ERR_ERL_UNEXPECTED_X_FORWARDED_FOR error when running behind reverse-proxy ([938b5ba](https://github.com/plutonhq/pluton/commit/938b5bab3e1aaec618d0ec99d072faf1aace7753))
+* resolves failed backup issue even when restic succeeds ([f69ed18](https://github.com/plutonhq/pluton/commit/f69ed189d293719e739c11585a42d47a724b997b))
+* resolves missing email error in plan notifications settings ([576459b](https://github.com/plutonhq/pluton/commit/576459bf49e9d36f504a859b8e3355cc615a3fdc))
+* resolves post-backup freezing issue in some cases ([f970d00](https://github.com/plutonhq/pluton/commit/f970d00aeac78799d6937221443808f3df5a9457))
+
 ## [0.18.0](https://github.com/plutonhq/pluton/compare/pluton-v0.17.1...pluton-v0.18.0) (2026-07-17)
 
 
