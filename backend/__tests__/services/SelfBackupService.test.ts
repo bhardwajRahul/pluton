@@ -68,6 +68,7 @@ function makeService(
 	overrides: {
 		selfBackup?: any;
 		storageName?: string | null;
+		storage?: Record<string, any>;
 		adminEmail?: string;
 		integration?: Record<string, any>;
 	} = {}
@@ -89,7 +90,14 @@ function makeService(
 		getById: jest
 			.fn()
 			.mockResolvedValue(
-				overrides.storageName === null ? null : { id: 'stor-1', name: overrides.storageName ?? 'mybackups' }
+				overrides.storageName === null
+					? null
+					: {
+							id: 'stor-1',
+							type: 's3',
+							name: overrides.storageName ?? 'mybackups',
+							...(overrides.storage ?? {}),
+						}
 			),
 	} as any;
 
@@ -203,6 +211,52 @@ describe('SelfBackupService', () => {
 		const result = await service.run();
 
 		expect(rcloneCalls('copyto')[0][0][2]).toBe(`mybackups:pluton/self/${result.blobName}`);
+	});
+
+	describe('local storage', () => {
+		const LOCAL_STORAGE = { id: 'local', type: 'local', name: 'Local Storage' };
+
+		const makeLocalService = (targetPath: string) =>
+			makeService({
+				storage: LOCAL_STORAGE,
+				selfBackup: {
+					...ENABLED,
+					storageId: 'local',
+					storageName: 'Local Storage',
+					path: targetPath,
+				},
+			}).service;
+
+		it('addresses the built-in local storage by its rclone remote name', async () => {
+			// The row is named "Local Storage", but rclone only knows the section "local".
+			const service = makeLocalService(tmpDir);
+			const result = await service.run();
+
+			expect(rcloneCalls('copyto')[0][0][2]).toBe(`local:${tmpDir}/${result.blobName}`);
+		});
+
+		it('keeps a local path absolute, trailing slash aside', async () => {
+			// Stripping the leading slash would make rclone resolve it against its own cwd.
+			const service = makeLocalService(`${tmpDir}/`);
+			const result = await service.run();
+
+			expect(rcloneCalls('copyto')[0][0][2]).toBe(`local:${tmpDir}/${result.blobName}`);
+		});
+
+		it('refuses a local folder that does not exist instead of creating one', async () => {
+			// rclone would create it and report success, quietly backing up into the container.
+			const service = makeLocalService(path.join(tmpDir, 'not-mounted'));
+
+			await expect(service.run()).rejects.toThrow(/does not exist or is not writable/);
+			expect(mockRunRcloneCommand).not.toHaveBeenCalled();
+		});
+
+		it('refuses an empty local path, which would mean rclone\'s working directory', async () => {
+			const service = makeLocalService('');
+
+			await expect(service.run()).rejects.toThrow(/Select a folder/);
+			expect(mockRunRcloneCommand).not.toHaveBeenCalled();
+		});
 	});
 
 	it('records success state including the fingerprint it uploaded', async () => {

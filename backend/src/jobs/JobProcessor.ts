@@ -222,10 +222,6 @@ class JobProcessor extends EventEmitter {
 				);
 				// Emit a specific event for permanent failures that listeners can act on.
 				// e.g., backup_failed, integrity_failed, 'prune_failed
-				console.log(
-					'######### JobProcessor-> Emit Fail Event :',
-					`${job.name.toLowerCase()}_failed`
-				);
 				this.emit(`${job.name.toLowerCase()}_failed`, {
 					...job.payload,
 					error: error.message || 'Unknown error after multiple retries.',

@@ -50,22 +50,14 @@ const SelfBackupSettings = ({ settings, settingsID, onUpdate }: SelfBackupSettin
 
    const update = (patch: Record<string, any>) => onUpdate({ ...settings, selfBackup: { ...selfBackup, ...patch } });
 
-   // This is the one backup whose failure would otherwise be discovered during a disaster,
-   // so a stale or failed run is surfaced loudly rather than tucked away in a log.
    const isStale =
       !!status?.enabled && (!status.lastSuccessAt || Date.now() - new Date(status.lastSuccessAt).getTime() > 2 * status.intervalHours * 3600 * 1000);
 
-   // The POST only queues the job and returns 202, so its own isPending covers just that
-   // round trip. `status.running` is what reports the actual run, straight from the job queue.
    const isRunning = runMutation.isPending || !!status?.running;
-
-   // Two hard prerequisites for the failure-notification toggle: a connected email integration
-   // (only ever marked `connected` after a successful test send) and an admin email to send to.
    const emailConnected = EMAIL_INTEGRATIONS.some((type) => settings?.integration?.[type]?.connected);
    const adminEmailSet = !!String(settings?.admin_email || '').trim();
    const canNotifyOnFailure = emailConnected && adminEmailSet;
 
-   // Only the title text, coloured by type — no background. Replaced while a run is in flight.
    const statusView = (() => {
       if (isRunning) return { text: 'Backing up Pluton…', className: classes.statusMuted };
       if (status?.lastError) return { text: 'Last backup failed', className: classes.statusWarn };
@@ -148,6 +140,11 @@ const SelfBackupSettings = ({ settings, settingsID, onUpdate }: SelfBackupSettin
                      View backups
                   </button>
                   {status?.enabled && <span className={`${classes.statusText} ${statusView.className}`}>{statusView.text}</span>}
+                  {!isRunning && status?.lastError && (
+                     <span className={classes.erroHint} data-tooltip-id="htmlToolTip" data-tooltip-place="top" data-tooltip-html={status.lastError}>
+                        <Icon type={'error-circle-filled'} color="#ff8888" size={16} />
+                     </span>
+                  )}
                </div>
             </>
          )}

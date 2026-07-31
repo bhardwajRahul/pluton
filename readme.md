@@ -78,6 +78,12 @@ services:
       # - /var/lib/docker/volumes/wp-data/_data:/mnt/wordpress:ro
       # - C:/ProgramData/docker/volumes/wp-data/_data:/mnt/wordpress:ro  # Windows
 
+      # Example: Mount a host directory to store backups in (Local Storage)
+      # Leave out ":ro", a backup destination has to be writable. In Pluton,
+      # select the container path (/mnt/backups), not the host path.
+      # - /mnt/disk1/backups:/mnt/backups #linux
+      # - D:/backups:/mnt/backups # Windows
+
     environment:
       # ===== REQUIRED: Security & Authentication =====
       # Generate secure random strings (min 12 characters each)

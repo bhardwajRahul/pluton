@@ -1,4 +1,5 @@
 import fsp from 'fs/promises';
+import { constants as fsConstants } from 'fs';
 import os from 'os';
 import path from 'path';
 import type { Database as SqliteDatabase } from 'better-sqlite3';
@@ -15,6 +16,7 @@ import { rcloneCopyTo, rcloneDeleteFile, rcloneLsJson } from '../utils/rclone/he
 import { jobQueue } from '../jobs/JobQueue';
 import { SELF_BACKUP_JOB_NAME } from '../jobs/systemJobs';
 import { AppError } from '../utils/AppError';
+import { normalizeStorageName } from '../utils/helpers';
 import { IntegrationTypes, SelfBackupSettings } from '../types/settings';
 import { NotificationChannelResolver } from '../notifications/channels/NotificationChannelResolver';
 import { SelfBackupFailedNotification } from '../notifications/templates/email/backup/SelfBackupFailedNotification';
@@ -27,6 +29,12 @@ const BLOB_NAME_RE = /^pluton-.*\.pluton$/;
 const SIDECAR_NAME = 'pluton-recovery.json';
 
 export type SelfBackupRunStatus = 'disabled' | 'skipped' | 'uploaded';
+
+/** The rclone remote behind a storage. `name` is the config section, not the display name. */
+interface SelfBackupRemote {
+	name: string;
+	isLocal: boolean;
+}
 
 export interface SelfBackupRunResult {
 	status: SelfBackupRunStatus;
@@ -104,7 +112,8 @@ export class SelfBackupService {
 		}
 
 		// The name is user-editable after save, so the zod check at save time isn't enough.
-		const remoteName = await this.resolveRemoteName(settings);
+		const remote = await this.resolveRemote(settings);
+		await this.assertLocalTargetUsable(remote, settings.path);
 
 		const tmpDir = await fsp.mkdtemp(path.join(appPaths.getTempDir(), 'self-backup-'));
 		try {
@@ -122,7 +131,7 @@ export class SelfBackupService {
 			const blobPath = path.join(tmpDir, blobName);
 			await fsp.writeFile(blobPath, blob, { mode: 0o600 });
 
-			const destDir = this.remoteDir(remoteName, settings.path);
+			const destDir = this.remoteDir(remote, settings.path);
 			await rcloneCopyTo(blobPath, this.remoteFile(destDir, blobName), undefined, {
 				timeoutMs: RCLONE_TIMEOUT_MS,
 			});
@@ -228,7 +237,8 @@ export class SelfBackupService {
 		return pageCount;
 	}
 
-	protected async resolveRemoteName(settings: SelfBackupSettings): Promise<string> {
+	/** The built-in local storage is named "Local Storage" but its rclone section is "local". */
+	protected async resolveRemote(settings: SelfBackupSettings): Promise<SelfBackupRemote> {
 		const storage = await this.storageStore.getById(settings.storageId);
 		if (!storage) {
 			throw new AppError(
@@ -236,12 +246,47 @@ export class SelfBackupService {
 				`The storage selected for Pluton backup no longer exists (id: ${settings.storageId}).`
 			);
 		}
-		return storage.name;
+		return {
+			name: storage.id === 'local' ? 'local' : normalizeStorageName(storage.name),
+			isLocal: storage.type === 'local',
+		};
 	}
 
-	protected remoteDir(remoteName: string, targetPath: string): string {
-		const cleaned = targetPath.replace(/^\/+|\/+$/g, '');
-		return `${remoteName}:${cleaned}`;
+	/**
+	 * rclone resolves a relative root against its own working directory, so a local target
+	 * must keep its leading slash. A cloud remote must not have one.
+	 */
+	protected remoteDir(remote: SelfBackupRemote, targetPath: string): string {
+		const trimmed = targetPath.replace(/\/+$/g, '');
+		const cleaned = remote.isLocal ? trimmed : trimmed.replace(/^\/+/, '');
+		return `${remote.name}:${cleaned}`;
+	}
+
+	/**
+	 * rclone would create a missing local directory and report success, so a path that is not
+	 * mounted into the container silently backs up into the container itself.
+	 */
+	protected async assertLocalTargetUsable(
+		remote: SelfBackupRemote,
+		targetPath: string
+	): Promise<void> {
+		if (!remote.isLocal) return;
+
+		const dir = targetPath.replace(/\/+$/g, '');
+		if (!dir) {
+			throw new AppError(400, 'Select a folder on the local storage for Pluton backup.');
+		}
+
+		try {
+			const stat = await fsp.stat(dir);
+			if (!stat.isDirectory()) throw new Error('not a directory');
+			await fsp.access(dir, fsConstants.W_OK);
+		} catch {
+			throw new AppError(
+				400,
+				`The Pluton backup folder "${dir}" does not exist or is not writable. In Docker, bind-mount it into the container as a read-write volume.`
+			);
+		}
 	}
 
 	/**
@@ -281,8 +326,8 @@ export class SelfBackupService {
 		const settings = await this.resolveSettings();
 		if (!settings.storageId) return [];
 
-		const remoteName = await this.resolveRemoteName(settings);
-		const destDir = this.remoteDir(remoteName, settings.path);
+		const remote = await this.resolveRemote(settings);
+		const destDir = this.remoteDir(remote, settings.path);
 		const items = await rcloneLsJson(destDir, undefined, { timeoutMs: RCLONE_TIMEOUT_MS });
 		return items
 			.filter(item => !item.IsDir && BLOB_NAME_RE.test(item.Name))
@@ -301,8 +346,8 @@ export class SelfBackupService {
 		}
 
 		const settings = await this.resolveSettings();
-		const remoteName = await this.resolveRemoteName(settings);
-		const destDir = this.remoteDir(remoteName, settings.path);
+		const remote = await this.resolveRemote(settings);
+		const destDir = this.remoteDir(remote, settings.path);
 
 		const tmpDir = await fsp.mkdtemp(path.join(appPaths.getTempDir(), 'self-backup-dl-'));
 		const localPath = path.join(tmpDir, blobName);
